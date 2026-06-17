@@ -1,9 +1,9 @@
 const CONTRACT_ADDRESS = "0xA74b8A3D82BFDd52B41AFD2D16a961394804F958";
 const NODE_RPC = "/genlayer-rpc";
 
-// Route the wallet popup through Sepolia Testnet to guarantee MetaMask opens the real gas payment screen
-const EVM_CHAIN_ID = "0xaa36a7"; // Sepolia Testnet Hex ID
-const EVM_RPC_URL = "https://rpc.ankr.com/eth_sepolia";
+// Correct Chain ID configuration for your GenLayer Network
+const GENLAYER_CHAIN_ID = "0x107d"; // 4221 in Hexadecimal
+const GENLAYER_RPC_URL = "https://rpc.bradbury.genlayer.com";
 
 let userAddress = null;
 
@@ -75,7 +75,7 @@ async function connectWallet() {
     }
 }
 
-// 3. EXECUTE GENUINE METAMASK PAYMENT POPUP
+// 3. NATIVE GENLAYER CONTRACT TRANSACTION TRIGGER
 async function handleSubmission(event) {
     if (event) event.preventDefault();
     const targetUrl = inputUrl ? inputUrl.value.trim() : "";
@@ -83,50 +83,47 @@ async function handleSubmission(event) {
 
     try {
         btnSubmit.disabled = true;
-        btnSubmit.innerText = "VERIFYING NETWORK STATE...";
-        log("Aligning wallet chain execution environment...");
+        btnSubmit.innerText = "ALIGNING NETWORK...";
+        log("Verifying GenLayer Testnet alignment...");
 
-        // Ensure wallet switches to a standard EVM environment so MetaMask doesn't crash on gas estimations
+        // Force switch back to your actual GenLayer network configuration parameters
         try {
             await window.ethereum.request({
-                method: 'wallet_switchEthereumChain',
-                params: [{ chainId: EVM_CHAIN_ID }]
+                method: 'wallet_addEthereumChain',
+                params: [{
+                    chainId: GENLAYER_CHAIN_ID,
+                    chainName: "GenLayer Bradbury Testnet",
+                    nativeCurrency: { name: "GenLayer Token", symbol: "GEN", decimals: 18 },
+                    rpcUrls: [GENLAYER_RPC_URL]
+                }]
             });
-        } catch (switchError) {
-            if (switchError.code === 4902) {
-                await window.ethereum.request({
-                    method: 'wallet_addEthereumChain',
-                    params: [{
-                        chainId: EVM_CHAIN_ID,
-                        chainName: "Sepolia Test Network",
-                        nativeCurrency: { name: "Sepolia Ether", symbol: "ETH", decimals: 18 },
-                        rpcUrls: [EVM_RPC_URL]
-                    }]
-                });
-            }
-        }
+        } catch (e) { console.debug(e); }
 
-        log("Spawning MetaMask gas confirmation window...");
+        log("Spawning MetaMask GenLayer transaction window...");
 
-        // Triggers a real 0.01 value transaction popup that MetaMask parses perfectly
+        // We use a generic custom request container that lets GenLayer's provider intercept 
+        // and format the transaction popup cleanly with real GEN values and gas.
         const txHash = await window.ethereum.request({
             method: 'eth_sendTransaction',
             params: [{
                 from: userAddress,
                 to: CONTRACT_ADDRESS,
-                value: '0x2386f26fc10000', // 0.01 Eth/Tokens in Hex
+                value: '0x0', // Native call value format
+                data: btoa(JSON.stringify({
+                    functionName: "submit_and_evaluate",
+                    args: [targetUrl]
+                }))
             }]
         });
 
-        log(`Transaction confirmed by wallet! Hash: ${txHash}`, "success");
-        log("Tokens successfully sent to contract destination.", "success");
+        log(`Transaction confirmed! Hash: ${txHash}`, "success");
         log("Payload accepted by network! AI Consensus validation triggered.", "success");
 
         if (liveUrl) liveUrl.innerText = `Last Validated Target: ${targetUrl}`;
         if (inputUrl) inputUrl.value = "";
 
     } catch (err) {
-        log(`Execution halted: ${err.message || "Transaction error encountered."}`, "error");
+        log(`Execution halted: ${err.message || "Transaction dropped."}`, "error");
     } finally {
         btnSubmit.disabled = false;
         btnSubmit.innerText = "BROADCAST EVALUATION";
