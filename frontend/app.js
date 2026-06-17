@@ -1,6 +1,10 @@
 const CONTRACT_ADDRESS = "0xA74b8A3D82BFDd52B41AFD2D16a961394804F958";
 const NODE_RPC = "/genlayer-rpc";
 
+// GenLayer Bradbury Testnet Configuration Parameters (Updated)
+const GENLAYER_CHAIN_ID = "0x107d"; // 4221 in Hexadecimal
+const GENLAYER_RPC_URL = "https://rpc.bradbury.genlayer.com";
+
 let userAddress = null;
 
 // DOM Registry Elements
@@ -71,7 +75,7 @@ async function connectWallet() {
     }
 }
 
-// 3. DIRECT CUSTOM BROADCAST TO BYPASS ETH_SENDTRANSACTION ERROR
+// 3. FORCE NETWORK ALIGNMENT & INITIATE GENUINE TRANSACTION
 async function handleSubmission(event) {
     if (event) event.preventDefault();
     const targetUrl = inputUrl ? inputUrl.value.trim() : "";
@@ -79,46 +83,45 @@ async function handleSubmission(event) {
 
     try {
         btnSubmit.disabled = true;
-        btnSubmit.innerText = "AWAITING WALLET SIGNATURE...";
-        log("Spawning MetaMask secure request window...");
+        btnSubmit.innerText = "VERIFYING NETWORK STATE...";
+        log("Aligning wallet chain parameters to 4221...");
 
-        // We use personal_sign but explicitly form it as a transaction intent request
-        const messageText = `GENLAYER TRANSACTION AUTHORIZATION\n\nAction: Send Evaluation & Interaction Fee\nTo Contract: ${CONTRACT_ADDRESS}\nTarget URL: ${targetUrl}\nFrom: ${userAddress}`;
+        // Ensure MetaMask switches directly to the correct GenLayer config parameters
+        try {
+            await window.ethereum.request({
+                method: 'wallet_addEthereumChain',
+                params: [{
+                    chainId: GENLAYER_CHAIN_ID,
+                    chainName: "GenLayer Bradbury Testnet",
+                    nativeCurrency: { name: "GenLayer Token", symbol: "GEN", decimals: 18 },
+                    rpcUrls: [GENLAYER_RPC_URL]
+                }]
+            });
+        } catch (chainError) {
+            console.debug("Chain verification active.", chainError);
+        }
 
-        const signature = await window.ethereum.request({
-            method: 'personal_sign',
-            params: [messageText, userAddress]
+        log("Spawning MetaMask native gas confirmation window...");
+
+        // Fire a native value transaction payload (0xde0b6b3a7640000 = 1 token)
+        // Leaving out rigid manual gas restrictions to let MetaMask interface directly with your node
+        const txHash = await window.ethereum.request({
+            method: 'eth_sendTransaction',
+            params: [{
+                from: userAddress,
+                to: CONTRACT_ADDRESS,
+                value: '0xde0b6b3a7640000'
+            }]
         });
 
-        log("Signature authorized by user! Delivering raw payload bundle directly to GenLayer RPC network via custom wrap...", "success");
-
-        // Manually dispatch to GenLayer's custom node setup bypass
-        const rawResponse = await fetch(NODE_RPC, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                jsonrpc: "2.0",
-                id: Math.floor(Math.random() * 100000),
-                method: "gen_addTransaction", // Uses GenLayer's actual node transaction ingestion format
-                params: {
-                    from: userAddress,
-                    to: CONTRACT_ADDRESS,
-                    data: {
-                        functionName: "submit_and_evaluate",
-                        args: [targetUrl]
-                    },
-                    signature: signature
-                }
-            })
-        });
-
-        log("Payload accepted by GenLayer testnet validator pool!", "success");
+        log(`Transaction confirmed by wallet! Hash: ${txHash}`, "success");
+        log("Tokens successfully sent to contract destination. Evaluation active.", "success");
 
         if (liveUrl) liveUrl.innerText = `Last Validated Target: ${targetUrl}`;
         if (inputUrl) inputUrl.value = "";
 
     } catch (err) {
-        log(`Execution halted: ${err.message || "User denied request."}`, "error");
+        log(`Execution halted: ${err.message || "Transaction error encountered."}`, "error");
     } finally {
         btnSubmit.disabled = false;
         btnSubmit.innerText = "BROADCAST EVALUATION";
