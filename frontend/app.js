@@ -27,10 +27,9 @@ function log(message, type = "info") {
     logBox.scrollTop = logBox.scrollHeight;
 }
 
-// 1. INITIALIZE DASHBOARD (SDK-FREE BYPASS)
+// 1. INITIALIZE DASHBOARD
 async function initAethera() {
     try {
-        // Instantly activate your green glowing active badge states
         if (statusBadge) {
             statusBadge.innerText = "NODE ACTIVE";
             statusBadge.className = "flex items-center gap-2 px-3 py-1 text-xs font-mono uppercase bg-emerald-950/80 text-emerald-400 rounded-full border border-emerald-500/30";
@@ -39,7 +38,6 @@ async function initAethera() {
             badgeDot.className = "h-2 w-2 rounded-full bg-emerald-400 animate-pulse";
         }
 
-        // Populate your UI panels instantly on startup
         if (liveTitle) liveTitle.innerText = "Consensus Diagnostics Active";
         if (liveCriteria) liveCriteria.innerText = "Active Rules: Verify content authenticity via GitHub commits link.";
 
@@ -62,16 +60,19 @@ async function connectWallet() {
         log(`Connected Account: ${userAddress}`, "success");
 
         if (btnConnect) btnConnect.innerText = `${userAddress.substring(0, 6)}...${userAddress.substring(userAddress.length - 4)}`;
+
+        // Fix: Force the button to turn glowing emerald green upon connection
         if (btnSubmit) {
             btnSubmit.disabled = false;
-            btnSubmit.innerText = "SIGN & BROADCAST TARGET";
+            btnSubmit.className = "w-full text-xs font-mono tracking-widest uppercase py-4 rounded bg-emerald-500 text-black font-bold hover:bg-emerald-400 transition-all shadow-[0_0_15px_rgba(16,185,129,0.4)]";
+            btnSubmit.innerText = "BROADCAST EVALUATION";
         }
     } catch (err) {
         log("Connection dropped by user.", "error");
     }
 }
 
-// 3. SECURE WALLET SIGNATURE & NATIVE BROADCAST
+// 3. TRIGGER METAMASK GAS POP-UP & TRANSMIT
 async function handleSubmission(event) {
     if (event) event.preventDefault();
     const targetUrl = inputUrl ? inputUrl.value.trim() : "";
@@ -79,45 +80,37 @@ async function handleSubmission(event) {
 
     try {
         btnSubmit.disabled = true;
-        btnSubmit.innerText = "AWAITING WALLET SIGNATURE...";
-        log("Spawning MetaMask secure signature window...");
+        btnSubmit.innerText = "AWAITING CONFIRMATION...";
+        log("Spawning MetaMask gas confirmation window...");
 
-        const messageText = `Aethera Network Authorization\n\nVerify Link Submission:\n${targetUrl}\n\nSender: ${userAddress}`;
-        const signature = await window.ethereum.request({
-            method: 'personal_sign',
-            params: [messageText, userAddress]
+        // Encode simple contract call data context
+        const callData = JSON.stringify({
+            functionName: "submit_and_evaluate",
+            args: [targetUrl]
         });
 
-        log("Signature secured successfully! Transmitting payload to GenLayer node...", "success");
-
-        const rawResponse = await fetch(NODE_RPC, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                jsonrpc: "2.0",
-                id: 1,
-                method: "eth_sendTransaction",
-                params: [{
-                    from: userAddress,
-                    to: CONTRACT_ADDRESS,
-                    data: JSON.stringify({
-                        functionName: "submit_and_evaluate",
-                        args: [targetUrl],
-                        signatureAuth: signature
-                    })
-                }]
-            })
+        // Fix: Send transaction through window.ethereum to trigger the real MetaMask gas fee screen
+        const txHash = await window.ethereum.request({
+            method: 'eth_sendTransaction',
+            params: [{
+                from: userAddress,
+                to: CONTRACT_ADDRESS,
+                data: btoa(callData), // Base64 or string encoding context for the data payload
+                gas: '0x5208' // 21000 default base gas or leave empty for auto estimation
+            }]
         });
 
+        log(`Transaction broadcasted! Hash: ${txHash}`, "success");
         log("Payload accepted by network! AI Consensus validation triggered.", "success");
+
         if (liveUrl) liveUrl.innerText = `Last Validated Target: ${targetUrl}`;
         if (inputUrl) inputUrl.value = "";
 
     } catch (err) {
-        log(`Execution halted: ${err.message || "User cancelled request."}`, "error");
+        log(`Execution halted: ${err.message || "User denied transaction."}`, "error");
     } finally {
         btnSubmit.disabled = false;
-        btnSubmit.innerText = "SIGN & BROADCAST TARGET";
+        btnSubmit.innerText = "BROADCAST EVALUATION";
     }
 }
 
