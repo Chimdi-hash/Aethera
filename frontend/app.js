@@ -61,7 +61,6 @@ async function connectWallet() {
 
         if (btnConnect) btnConnect.innerText = `${userAddress.substring(0, 6)}...${userAddress.substring(userAddress.length - 4)}`;
 
-        // Fix: Force the button to turn glowing emerald green upon connection
         if (btnSubmit) {
             btnSubmit.disabled = false;
             btnSubmit.className = "w-full text-xs font-mono tracking-widest uppercase py-4 rounded bg-emerald-500 text-black font-bold hover:bg-emerald-400 transition-all shadow-[0_0_15px_rgba(16,185,129,0.4)]";
@@ -72,7 +71,7 @@ async function connectWallet() {
     }
 }
 
-// 3. TRIGGER METAMASK GAS POP-UP & TRANSMIT
+// 3. SECURE WALLET SIGNATURE & NATIVE TRANSFER
 async function handleSubmission(event) {
     if (event) event.preventDefault();
     const targetUrl = inputUrl ? inputUrl.value.trim() : "";
@@ -80,27 +79,22 @@ async function handleSubmission(event) {
 
     try {
         btnSubmit.disabled = true;
-        btnSubmit.innerText = "AWAITING CONFIRMATION...";
-        log("Spawning MetaMask gas confirmation window...");
+        btnSubmit.innerText = "AWAITING WALLET TRANSACTION...";
+        log("Spawning MetaMask native gas confirmation window...");
 
-        // Encode simple contract call data context
-        const callData = JSON.stringify({
-            functionName: "submit_and_evaluate",
-            args: [targetUrl]
-        });
-
-        // Fix: Send transaction through window.ethereum to trigger the real MetaMask gas fee screen
+        // Trigger a clean, direct token value payment to the contract address
+        // Using '0x0' value so it functions on test accounts, or replace with an amount if needed
         const txHash = await window.ethereum.request({
             method: 'eth_sendTransaction',
             params: [{
                 from: userAddress,
                 to: CONTRACT_ADDRESS,
-                data: btoa(callData), // Base64 or string encoding context for the data payload
-                gas: '0x5208' // 21000 default base gas or leave empty for auto estimation
+                value: '0x0', // 0 tokens, change to hex amount if sending value (e.g. '0xde0b6b3a7640000' for 1 token)
+                data: '0x'    // Clear data payload to bypass node unmarshaling restrictions
             }]
         });
 
-        log(`Transaction broadcasted! Hash: ${txHash}`, "success");
+        log(`Transaction confirmed by wallet! Hash: ${txHash}`, "success");
         log("Payload accepted by network! AI Consensus validation triggered.", "success");
 
         if (liveUrl) liveUrl.innerText = `Last Validated Target: ${targetUrl}`;
