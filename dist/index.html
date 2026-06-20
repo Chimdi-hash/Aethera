@@ -30,14 +30,20 @@
         var _nextRpcId = 1;
 
         // Patch window.ethereum to sanitize eth_sendTransaction parameters for MetaMask/wallets
+        // Keep all standard EVM tx fields — only strip non-standard properties that wallets reject.
+        var KNOWN_TX_FIELDS = new Set([
+            'from', 'to', 'data', 'value', 'gas', 'gasLimit',
+            'gasPrice', 'maxFeePerGas', 'maxPriorityFeePerGas',
+            'nonce', 'type', 'chainId', 'accessList'
+        ]);
         var sanitizeTxParams = function (tx) {
             if (!tx || typeof tx !== 'object') return tx;
             var cleanedTx = {};
-            if ('from' in tx) cleanedTx.from = tx.from;
-            if ('to' in tx) cleanedTx.to = tx.to;
-            if ('data' in tx) cleanedTx.data = tx.data;
-            if ('value' in tx) cleanedTx.value = tx.value;
-            if ('gas' in tx) cleanedTx.gas = tx.gas;
+            for (var key in tx) {
+                if (KNOWN_TX_FIELDS.has(key)) {
+                    cleanedTx[key] = tx[key];
+                }
+            }
             return cleanedTx;
         };
 
@@ -241,7 +247,7 @@
         @keyframes status-pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
         .status-live { animation: status-pulse 2s ease-in-out infinite; }
     </style>
-  <script type="module" crossorigin src="/assets/index-tFvT-6V6.js"></script>
+  <script type="module" crossorigin src="/assets/index-CrKFm2-z.js"></script>
 </head>
 <body class="bg-[#0b0c10] text-[#c5a059] min-h-screen flex flex-col selection:bg-[#45a29e] selection:text-black">
 

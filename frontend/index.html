@@ -30,14 +30,20 @@
         var _nextRpcId = 1;
 
         // Patch window.ethereum to sanitize eth_sendTransaction parameters for MetaMask/wallets
+        // Keep all standard EVM tx fields — only strip non-standard properties that wallets reject.
+        var KNOWN_TX_FIELDS = new Set([
+            'from', 'to', 'data', 'value', 'gas', 'gasLimit',
+            'gasPrice', 'maxFeePerGas', 'maxPriorityFeePerGas',
+            'nonce', 'type', 'chainId', 'accessList'
+        ]);
         var sanitizeTxParams = function (tx) {
             if (!tx || typeof tx !== 'object') return tx;
             var cleanedTx = {};
-            if ('from' in tx) cleanedTx.from = tx.from;
-            if ('to' in tx) cleanedTx.to = tx.to;
-            if ('data' in tx) cleanedTx.data = tx.data;
-            if ('value' in tx) cleanedTx.value = tx.value;
-            if ('gas' in tx) cleanedTx.gas = tx.gas;
+            for (var key in tx) {
+                if (KNOWN_TX_FIELDS.has(key)) {
+                    cleanedTx[key] = tx[key];
+                }
+            }
             return cleanedTx;
         };
 

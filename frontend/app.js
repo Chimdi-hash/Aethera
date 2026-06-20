@@ -112,12 +112,41 @@ function startApp() {
     }
 
     // ── 1. Init ──────────────────────────────────────────
-    function initAethera() {
-        setStatus("NODE ACTIVE", true);
-        if (liveTitle)    liveTitle.textContent    = "Consensus Diagnostics Active";
-        if (liveCriteria) liveCriteria.textContent =
-            "Active Rules: Verify content authenticity via GitHub commits link.";
-        log("Aethera network infrastructure connected — GenLayer Bradbury Testnet.");
+    async function initAethera() {
+        setStatus("CONNECTING…", false);
+        log("Testing connection to GenLayer Bradbury Testnet…");
+
+        try {
+            // Use the proxy endpoint so the same path works on Vercel and local dev.
+            const resp = await fetch(PROXY_RPC_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ jsonrpc: "2.0", method: "eth_chainId", params: [], id: 1 }),
+            });
+
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+            const json = await resp.json();
+            if (json.error) throw new Error(json.error.message || "RPC error");
+
+            const chainId = parseInt(json.result, 16);
+            if (chainId !== CHAIN_ID_DEC) {
+                throw new Error(`Unexpected chain ${chainId}, expected ${CHAIN_ID_DEC}`);
+            }
+
+            setStatus("NODE ACTIVE", true);
+            if (liveTitle)    liveTitle.textContent    = "Consensus Diagnostics Active";
+            if (liveCriteria) liveCriteria.textContent =
+                "Active Rules: Verify content authenticity via GitHub commits link.";
+            log("Aethera network infrastructure connected — GenLayer Bradbury Testnet.", "success");
+        } catch (err) {
+            setStatus("NODE OFFLINE", false);
+            if (liveTitle) liveTitle.textContent = "Unable to reach GenLayer node";
+            if (liveCriteria) liveCriteria.textContent = "Retrying in 15 seconds…";
+            log(`Node health-check failed: ${err.message}`, "error");
+            // Auto-retry after 15s
+            setTimeout(() => initAethera(), 15_000);
+        }
     }
 
     // ── 2. Network switch helper ──────────────────────────

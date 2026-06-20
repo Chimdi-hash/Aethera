@@ -1,11 +1,13 @@
 // api/rpc.js — Vercel Serverless Function (Node.js)
 // Proxies JSON-RPC to GenLayer Bradbury, clamping/restoring the `id` field.
+//
+// Uses CommonJS (module.exports) for maximum Vercel @vercel/node compatibility.
 
 const UPSTREAM = "https://rpc-bradbury.genlayer.com";
 
 let nextRpcId = 1;
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
     // Set CORS headers
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -35,7 +37,7 @@ export default async function handler(req, res) {
     }
 
     // Save original IDs and replace with sequential safe integers
-    let originalIdsMap = {}; // Maps: newIntId -> originalId
+    const originalIdsMap = {}; // Maps: newIntId -> originalId
     let changed = false;
 
     const fixOne = (obj) => {
@@ -64,7 +66,7 @@ export default async function handler(req, res) {
             method: "POST",
             headers: { 
                 "Content-Type": "application/json",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+                "User-Agent": "AetheraDapp/1.0"
             },
             body: JSON.stringify(body),
         });
@@ -108,4 +110,4 @@ export default async function handler(req, res) {
 
         return res.status(502).json({ jsonrpc: "2.0", id: fallbackId, error: { code: -32000, message: String(err) } });
     }
-}
+};
