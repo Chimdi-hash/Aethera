@@ -1,17 +1,47 @@
 // vite.config.js — Aethera dApp
-// Adds a local /api/rpc proxy for dev that fixes the JSON-RPC `id` to an integer
-// before forwarding to the GenLayer Bradbury RPC. The same endpoint is provided
-// by api/rpc.js (Vercel serverless function) in production.
+//
+// ROOT CAUSE OF THE GENLAYER RPC ERROR:
+//   genlayer-js uses `id: Date.now()` for JSON-RPC requests.
+//   Date.now() returns ~1.78 * 10^12 — far beyond int32 max (2,147,483,647).
+//   The GenLayer Go RPC server uses int32 for the `id` field.
+//   When Go's JSON parser tries to read 1781939760816 into an int32, it
+//   overflows and reports: "cannot unmarshal string into Go struct field
+//   Request.id of type int".
+//
+// FIX:
+//   The `patchGenlayerRpcId` plugin below intercepts genlayer-js during
+//   bundling and replaces `id: Date.now()` with `id: 1`. This small safe
+//   integer fits in any Go int type. Applies to both dev server and builds.
+//
+// The /api/rpc proxy plugin is kept as a secondary fix to handle MetaMask's
+// internal RPC calls (MetaMask also uses its own fetch to the chain RPC URL).
 
 import { defineConfig } from "vite";
 
 const GENLAYER_RPC = "https://rpc.bradbury.genlayer.com";
 
+// ── 1. Fix Date.now() → 1 in genlayer-js bundle ─────────────────────────────
+const patchGenlayerRpcId = {
+    name: "patch-genlayer-rpc-id",
+    transform(code, id) {
+        if (id.includes("genlayer-js") && code.includes("id: Date.now()")) {
+            // Replace the problematic large timestamp id with integer 1
+            const patched = code.replace(/id:\s*Date\.now\(\)/g, "id: 1");
+            return { code: patched, map: null };
+        }
+    },
+};
+
+// ── 2. Local dev proxy: /api/rpc → GenLayer RPC (also fixes any stray ids) ──
 function fixRpcId(body) {
     const fixOne = (obj) => {
         if (obj && typeof obj === "object" && "id" in obj) {
             const n = Number(obj.id);
-            if (!Number.isNaN(n)) obj.id = n;
+            if (!Number.isNaN(n) && n <= 2147483647) {
+                obj.id = n;
+            } else {
+                obj.id = 1; // fallback to safe integer
+            }
         }
     };
     if (Array.isArray(body)) body.forEach(fixOne);
@@ -19,12 +49,10 @@ function fixRpcId(body) {
     return body;
 }
 
-/** Vite plugin: intercepts POST /api/rpc, fixes the JSON-RPC id, forwards upstream */
 const genLayerRpcProxy = {
     name: "genlayer-rpc-proxy",
     configureServer(server) {
         server.middlewares.use("/api/rpc", async (req, res) => {
-            // Handle CORS preflight
             res.setHeader("Access-Control-Allow-Origin", "*");
             res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
             res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -34,14 +62,12 @@ const genLayerRpcProxy = {
                 res.end();
                 return;
             }
-
             if (req.method !== "POST") {
                 res.writeHead(405);
                 res.end("Method Not Allowed");
                 return;
             }
 
-            // Read request body
             const chunks = [];
             for await (const chunk of req) chunks.push(chunk);
             const rawBody = Buffer.concat(chunks).toString("utf8");
@@ -50,7 +76,7 @@ const genLayerRpcProxy = {
             try {
                 body = fixRpcId(JSON.parse(rawBody));
             } catch {
-                body = rawBody; // not JSON, pass through
+                body = rawBody;
             }
 
             try {
@@ -79,5 +105,5 @@ export default defineConfig({
         outDir: "../dist",
         emptyOutDir: true,
     },
-    plugins: [genLayerRpcProxy],
+    plugins: [patchGenlayerRpcId, genLayerRpcProxy],
 });
