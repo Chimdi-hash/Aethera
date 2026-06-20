@@ -13,45 +13,59 @@ const CHAIN_ID_HEX      = "0x107d";   // 4221
 const CHAIN_ID_DEC      = 4221;
 const RPC_URL           = "https://rpc.bradbury.genlayer.com";
 
-// ── Global fetch patch: coerce JSON-RPC `id` → integer ──────────────────────
-// The GenLayer Bradbury Testnet Go RPC server rejects requests where `id` is
-// a string (e.g. "1" or a stringified timestamp). Both MetaMask's relay and
-// genlayer-js itself can emit non-integer ids. Patching fetch globally is the
-// only reliable interception point that covers all code paths.
-;(function patchFetchForGenLayerRpc() {
-    const _fetch = window.fetch.bind(window);
-    window.fetch = async function (input, init) {
-        const url = typeof input === "string" ? input : (input instanceof URL ? input.href : input.url);
-        if (url && url.includes("genlayer.com") && init?.body && typeof init.body === "string") {
-            try {
-                const parsed = JSON.parse(init.body);
-                let patched = false;
+// ── Direct RPC call helper (always integer id, bypasses MetaMask relay) ──────
+async function rpcCall(method, params = []) {
+    const res = await fetch(RPC_URL, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+    });
+    const data = await res.json();
+    if (data.error) throw Object.assign(new Error(data.error.message ?? "RPC error"), data.error);
+    return data.result;
+}
 
-                function fixId(obj) {
-                    if (obj && typeof obj === "object" && "id" in obj) {
-                        const asNum = Number(obj.id);
-                        if (!Number.isNaN(asNum) && obj.id !== asNum) {
-                            obj.id = asNum;
-                            patched = true;
-                        }
-                    }
-                }
-
-                if (Array.isArray(parsed)) {
-                    parsed.forEach(fixId);
-                } else {
-                    fixId(parsed);
-                }
-
-                if (patched) {
-                    init = { ...init, body: JSON.stringify(parsed) };
-                }
-            } catch {
-                // not JSON — leave as-is
+// ── window.ethereum proxy: intercept eth_sendTransaction ─────────────────────
+// Problem: MetaMask forwards eth_sendTransaction to the chain's RPC using its
+// own internal fetch (browser-extension context) — a context we cannot patch.
+// MetaMask serialises the JSON-RPC `id` as a string, which the GenLayer Go RPC
+// rejects. Fix: intercept eth_sendTransaction BEFORE MetaMask sees it, ask
+// MetaMask to only SIGN the tx (eth_signTransaction returns a hex blob), then
+// submit the signed raw tx ourselves via rpcCall() where id is always integer 1.
+;(function proxyEthereumForGenLayer() {
+    function installProxy(provider) {
+        if (provider.__genLayerPatched) return;
+        const _request = provider.request.bind(provider);
+        provider.request = async function (args) {
+            if (args?.method === "eth_sendTransaction") {
+                // Step 1 – ask MetaMask to sign (not broadcast)
+                const signedHex = await _request({ method: "eth_signTransaction", params: args.params });
+                // Step 2 – broadcast ourselves with a proper integer id
+                return rpcCall("eth_sendRawTransaction", [signedHex]);
             }
-        }
-        return _fetch(input, init);
-    };
+            return _request(args);
+        };
+        provider.__genLayerPatched = true;
+    }
+
+    if (window.ethereum) {
+        installProxy(window.ethereum);
+    } else {
+        // MetaMask may load after our script — wait for it
+        window.addEventListener("ethereum#initialized", () => {
+            if (window.ethereum) installProxy(window.ethereum);
+        }, { once: true });
+        // Fallback: observe the property being set
+        let _eth = window.ethereum;
+        Object.defineProperty(window, "ethereum", {
+            get() { return _eth; },
+            set(val) {
+                _eth = val;
+                if (val) installProxy(val);
+            },
+            configurable: true,
+        });
+    }
 }());
 
 
