@@ -6,6 +6,26 @@
 import { createClient }    from "genlayer-js";
 import { testnetBradbury } from "genlayer-js/chains";
 import { TransactionStatus } from "genlayer-js/types";
+import { custom } from "viem";
+
+// ── Custom transport: coerce JSON-RPC `id` string → integer ─────────────────
+// GenLayer Bradbury Testnet RPC strictly requires id to be an int, but viem
+// sends it as a string (e.g. "1"). This intercepts every request and fixes it.
+function makeIntIdTransport() {
+    return custom({
+        async request({ method, params }) {
+            const body = JSON.stringify({ jsonrpc: "2.0", id: 1, method, params });
+            const res = await fetch(RPC_URL, {
+                method:  "POST",
+                headers: { "Content-Type": "application/json" },
+                body,
+            });
+            const json = await res.json();
+            if (json.error) throw json.error;
+            return json.result;
+        },
+    });
+}
 
 // ── Config ──────────────────────────────────────────────────
 const CONTRACT_ADDRESS  = "0xA74b8A3D82BFDd52B41AFD2D16a961394804F958";
@@ -174,10 +194,11 @@ document.addEventListener("DOMContentLoaded", () => {
             await ensureGenLayerNetwork();
             log("Switched to GenLayer Bradbury Testnet ✓", "success");
 
-            // Build GenLayer JS client
+            // Build GenLayer JS client with custom transport that sends id as int
             genLayerClient = createClient({
-                chain:   testnetBradbury,
-                account: userAddress,
+                chain:     testnetBradbury,
+                account:   userAddress,
+                transport: makeIntIdTransport(),
             });
 
             // Update connect button
@@ -196,7 +217,7 @@ document.addEventListener("DOMContentLoaded", () => {
             window.ethereum.on("accountsChanged", (accs) => {
                 if (accs.length === 0) { location.reload(); return; }
                 userAddress = accs[0];
-                genLayerClient = createClient({ chain: testnetBradbury, account: userAddress });
+                genLayerClient = createClient({ chain: testnetBradbury, account: userAddress, transport: makeIntIdTransport() });
                 if (btnConnect) btnConnect.textContent =
                     `${userAddress.slice(0, 6)}…${userAddress.slice(-4)}`;
                 log("Account changed: " + userAddress, "warn");
