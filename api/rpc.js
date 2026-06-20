@@ -1,32 +1,62 @@
-// api/rpc.js — Vercel serverless function
+// api/rpc.js — Vercel Edge Function
 //
-// ROOT CAUSE: genlayer-js uses `id: Date.now()` which exceeds int32 max.
-// This proxy clamps all JSON-RPC `id` values to safe integers before
-// forwarding to the GenLayer Go RPC server. Handles both string ids
-// (from MetaMask) and oversized integer ids (from genlayer-js).
+// Runs at Vercel's edge network. Proxies JSON-RPC to GenLayer Bradbury,
+// clamping the `id` field to a safe int32 value before forwarding.
+//
+// Used by MetaMask when the user has the chain configured with this URL.
+// genlayer-js's own calls use the patched bundle (id:1 via Vite transform).
+//
+// Edge Functions use Web standard Request/Response API (not Node.js req/res).
+
+export const config = { runtime: "edge" };
 
 const UPSTREAM = "https://rpc.bradbury.genlayer.com";
 
-function fixId(obj) {
-    if (obj && typeof obj === "object" && "id" in obj) {
-        const n = Number(obj.id);
-        // Clamp to int32-safe range or default to 1
-        obj.id = (!Number.isNaN(n) && n >= 0 && n <= 2147483647) ? Math.floor(n) : 1;
-    }
+const CORS = {
+    "Access-Control-Allow-Origin":  "*",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+};
+
+function safeId(val) {
+    const n = Number(val);
+    if (!Number.isNaN(n) && n >= 0 && n <= 2147483647) return Math.floor(n);
+    return 1;
 }
 
-export default async function handler(req, res) {
-    res.setHeader("Access-Control-Allow-Origin",  "*");
-    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+function fixId(body) {
+    if (Array.isArray(body)) {
+        body.forEach(obj => { if (obj && "id" in obj) obj.id = safeId(obj.id); });
+    } else if (body && typeof body === "object" && "id" in body) {
+        body.id = safeId(body.id);
+    }
+    return body;
+}
 
-    if (req.method === "OPTIONS") { res.status(204).end(); return; }
-    if (req.method !== "POST")   { res.status(405).json({ error: "Method Not Allowed" }); return; }
+export default async function handler(request) {
+    // CORS preflight
+    if (request.method === "OPTIONS") {
+        return new Response(null, { status: 204, headers: CORS });
+    }
 
-    let body = req.body;
+    if (request.method !== "POST") {
+        return new Response(JSON.stringify({ error: "Method Not Allowed" }), {
+            status: 405,
+            headers: { ...CORS, "Content-Type": "application/json" },
+        });
+    }
 
-    if (Array.isArray(body)) body.forEach(fixId);
-    else fixId(body);
+    let body;
+    try {
+        body = await request.json();
+    } catch {
+        return new Response(
+            JSON.stringify({ jsonrpc: "2.0", id: 1, error: { code: -32700, message: "Parse error" } }),
+            { status: 400, headers: { ...CORS, "Content-Type": "application/json" } }
+        );
+    }
+
+    fixId(body);
 
     try {
         const upstream = await fetch(UPSTREAM, {
@@ -34,13 +64,16 @@ export default async function handler(req, res) {
             headers: { "Content-Type": "application/json" },
             body:    JSON.stringify(body),
         });
-        const data = await upstream.json();
-        res.status(upstream.status).json(data);
-    } catch (err) {
-        res.status(502).json({
-            jsonrpc: "2.0",
-            id: body?.id ?? 1,
-            error: { code: -32000, message: String(err) },
+
+        const text = await upstream.text();
+        return new Response(text, {
+            status: upstream.status,
+            headers: { ...CORS, "Content-Type": "application/json" },
         });
+    } catch (err) {
+        return new Response(
+            JSON.stringify({ jsonrpc: "2.0", id: body?.id ?? 1, error: { code: -32000, message: String(err) } }),
+            { status: 502, headers: { ...CORS, "Content-Type": "application/json" } }
+        );
     }
 }

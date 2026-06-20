@@ -2,15 +2,7 @@
     "version": 2,
     "buildCommand": "npm run build",
     "outputDirectory": "dist",
-    "functions": {
-        "api/rpc.js": {
-            "maxDuration": 30
-        }
-    },
     "rewrites": [
-        {
-            "source": "/((?!api/).*)",
-            "destination": "/index.html"
-        }
+        { "source": "/(.*)", "destination": "/index.html" }
     ]
 }

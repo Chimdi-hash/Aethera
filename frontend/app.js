@@ -195,16 +195,14 @@ document.addEventListener("DOMContentLoaded", () => {
             await ensureGenLayerNetwork();
             log("Switched to GenLayer Bradbury Testnet ✓", "success");
 
-            // Build genlayer-js client.
-            // endpoint: PROXY_RPC_URL routes ALL genlayer-js direct RPC calls
-            // (eth_estimateGas, eth_gasPrice, eth_sendRawTransaction, etc.)
-            // through our Vercel function at /api/rpc which always sends id:1.
-            // MetaMask is also configured with this proxy URL so its broadcasts
-            // also go through the same function.
+            // endpoint NOT set here — genlayer-js calls GenLayer directly.
+            // id: Date.now() is patched to id:1 by the Vite transform plugin
+            // (patchGenlayerRpcId in vite.config.js), so the Go int32 overflow
+            // no longer occurs. MetaMask's broadcasts go to the proxy URL set
+            // via wallet_addEthereumChain.
             genLayerClient = createClient({
-                chain:    testnetBradbury,
-                account:  userAddress,
-                endpoint: PROXY_RPC_URL,
+                chain:   testnetBradbury,
+                account: userAddress,
             });
 
             if (btnConnect) {
@@ -221,7 +219,7 @@ document.addEventListener("DOMContentLoaded", () => {
             window.ethereum.on("accountsChanged", (accs) => {
                 if (accs.length === 0) { location.reload(); return; }
                 userAddress = accs[0];
-                genLayerClient = createClient({ chain: testnetBradbury, account: userAddress, endpoint: PROXY_RPC_URL });
+                genLayerClient = createClient({ chain: testnetBradbury, account: userAddress });
                 if (btnConnect) btnConnect.textContent =
                     `${userAddress.slice(0, 6)}…${userAddress.slice(-4)}`;
                 log("Account changed: " + userAddress, "warn");
