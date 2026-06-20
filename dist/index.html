@@ -29,6 +29,45 @@
         var _origFetch = window.fetch;
         var _nextRpcId = 1;
 
+        // Patch window.ethereum to sanitize eth_sendTransaction parameters for MetaMask/wallets
+        var patchEthereum = function (provider) {
+            if (!provider || provider._ethSendTxPatched) return;
+            provider._ethSendTxPatched = true;
+
+            var _origRequest = provider.request;
+            provider.request = async function (args) {
+                if (args && args.method === 'eth_sendTransaction' && Array.isArray(args.params) && args.params[0]) {
+                    var tx = args.params[0];
+                    var cleanedTx = {};
+                    if ('from' in tx) cleanedTx.from = tx.from;
+                    if ('to' in tx) cleanedTx.to = tx.to;
+                    if ('data' in tx) cleanedTx.data = tx.data;
+                    if ('value' in tx) cleanedTx.value = tx.value;
+                    if ('gas' in tx) cleanedTx.gas = tx.gas;
+                    args.params[0] = cleanedTx;
+                }
+                return _origRequest.apply(this, arguments);
+            };
+        };
+
+        if (window.ethereum) {
+            patchEthereum(window.ethereum);
+        } else {
+            Object.defineProperty(window, 'ethereum', {
+                configurable: true,
+                enumerable: true,
+                get: function () {
+                    return this._ethereum;
+                },
+                set: function (val) {
+                    this._ethereum = val;
+                    if (val) {
+                        patchEthereum(val);
+                    }
+                }
+            });
+        }
+
         window.fetch = async function rpcIdPatch(input, init) {
             var url, method, bodyText;
 
