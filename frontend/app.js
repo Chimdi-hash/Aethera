@@ -3,9 +3,10 @@
 //  app.js — all DOM work happens inside DOMContentLoaded
 // ============================================================
 
-import { createClient }    from "genlayer-js";
-import { testnetBradbury } from "genlayer-js/chains";
-import { TransactionStatus } from "genlayer-js/types";
+import { createClient }                              from "genlayer-js";
+import { testnetBradbury }                           from "genlayer-js/chains";
+import { TransactionStatus }                         from "genlayer-js/types";
+import { toAccount, serializeTransaction, keccak256 } from "viem";
 
 // ── Config ──────────────────────────────────────────────────
 const CONTRACT_ADDRESS  = "0xA74b8A3D82BFDd52B41AFD2D16a961394804F958";
@@ -13,7 +14,9 @@ const CHAIN_ID_HEX      = "0x107d";   // 4221
 const CHAIN_ID_DEC      = 4221;
 const RPC_URL           = "https://rpc.bradbury.genlayer.com";
 
-// ── Direct RPC call helper (always integer id, bypasses MetaMask relay) ──────
+// ── Direct RPC helper — id is always an integer ──────────────────────────────
+// GenLayer Bradbury's Go RPC rejects requests where `id` is a string.
+// Every call to the GenLayer RPC goes through here so we always control the id.
 async function rpcCall(method, params = []) {
     const res = await fetch(RPC_URL, {
         method:  "POST",
@@ -25,49 +28,80 @@ async function rpcCall(method, params = []) {
     return data.result;
 }
 
-// ── window.ethereum proxy: intercept eth_sendTransaction ─────────────────────
-// Problem: MetaMask forwards eth_sendTransaction to the chain's RPC using its
-// own internal fetch (browser-extension context) — a context we cannot patch.
-// MetaMask serialises the JSON-RPC `id` as a string, which the GenLayer Go RPC
-// rejects. Fix: intercept eth_sendTransaction BEFORE MetaMask sees it, ask
-// MetaMask to only SIGN the tx (eth_signTransaction returns a hex blob), then
-// submit the signed raw tx ourselves via rpcCall() where id is always integer 1.
-;(function proxyEthereumForGenLayer() {
-    function installProxy(provider) {
-        if (provider.__genLayerPatched) return;
-        const _request = provider.request.bind(provider);
-        provider.request = async function (args) {
-            if (args?.method === "eth_sendTransaction") {
-                // Step 1 – ask MetaMask to sign (not broadcast)
-                const signedHex = await _request({ method: "eth_signTransaction", params: args.params });
-                // Step 2 – broadcast ourselves with a proper integer id
-                return rpcCall("eth_sendRawTransaction", [signedHex]);
-            }
-            return _request(args);
-        };
-        provider.__genLayerPatched = true;
-    }
+// ── MetaMask-backed viem local account ───────────────────────────────────────
+// genlayer-js's _sendTransaction() has two code paths:
+//   A. account.type === "local"  → signTransaction() + eth_sendRawTransaction
+//   B. plain address string      → eth_sendTransaction directly on the RPC
+//
+// The GenLayer Bradbury RPC does NOT support eth_sendTransaction (returns
+// "Method not supported"). Path A is the ONLY viable path.
+//
+// We create a viem "local account" object whose signTransaction() delegates
+// to MetaMask:
+//   1. Build the unsigned EIP-155 legacy tx with serializeTransaction (no sig)
+//   2. Hash it with keccak256
+//   3. Ask MetaMask to sign the hash via eth_sign (raw ECDSA, no prefix)
+//   4. Decode the 65-byte signature → {r, s, v}
+//   5. Re-serialize the tx WITH the signature → final signed hex
+//
+// genlayer-js then submits this via eth_sendRawTransaction using its own direct
+// fetch (with id: Date.now(), a valid integer) — no MetaMask relay involved.
+async function buildMetaMaskAccount(address) {
+    return toAccount({
+        address,
 
-    if (window.ethereum) {
-        installProxy(window.ethereum);
-    } else {
-        // MetaMask may load after our script — wait for it
-        window.addEventListener("ethereum#initialized", () => {
-            if (window.ethereum) installProxy(window.ethereum);
-        }, { once: true });
-        // Fallback: observe the property being set
-        let _eth = window.ethereum;
-        Object.defineProperty(window, "ethereum", {
-            get() { return _eth; },
-            set(val) {
-                _eth = val;
-                if (val) installProxy(val);
-            },
-            configurable: true,
-        });
-    }
-}());
+        // Called by genlayer-js to produce the signed raw transaction bytes
+        async signTransaction(txRequest) {
+            // Build the EIP-155 unsigned transaction (no r/s/v)
+            const unsigned = {
+                type:     "legacy",
+                chainId:  txRequest.chainId ?? CHAIN_ID_DEC,
+                nonce:    txRequest.nonce,
+                gasPrice: txRequest.gasPrice,
+                gas:      txRequest.gas,
+                to:       txRequest.to,
+                value:    txRequest.value ?? 0n,
+                data:     txRequest.data ?? "0x",
+            };
 
+            // Serialize unsigned tx then hash it
+            const unsignedHex = serializeTransaction(unsigned);
+            const txHash      = keccak256(unsignedHex);
+
+            // Ask MetaMask to sign the raw hash (no "\x19Ethereum..." prefix)
+            const sigHex = await window.ethereum.request({
+                method: "eth_sign",
+                params: [address, txHash],
+            });
+
+            // Parse the 65-byte sig: r (32) | s (32) | v (1)
+            const sig = sigHex.slice(2); // strip 0x
+            const r   = `0x${sig.slice(0,  64)}`;
+            const s   = `0x${sig.slice(64, 128)}`;
+            const vRaw = parseInt(sig.slice(128, 130), 16);
+            // EIP-155 replay-protection: v = chainId*2 + 35 or 36
+            const v = BigInt(vRaw < 27 ? vRaw + CHAIN_ID_DEC * 2 + 35 : vRaw);
+
+            // Serialize WITH signature → signed raw tx
+            return serializeTransaction(unsigned, { r, s, v });
+        },
+
+        // MetaMask holds the private key — we never sign raw messages directly
+        async signMessage({ message }) {
+            return window.ethereum.request({
+                method: "personal_sign",
+                params: [typeof message === "string" ? message : message.raw, address],
+            });
+        },
+
+        async signTypedData(typedData) {
+            return window.ethereum.request({
+                method: "eth_signTypedData_v4",
+                params: [address, JSON.stringify(typedData)],
+            });
+        },
+    });
+}
 
 // ── App state ───────────────────────────────────────────────
 let userAddress     = null;
@@ -230,10 +264,14 @@ document.addEventListener("DOMContentLoaded", () => {
             await ensureGenLayerNetwork();
             log("Switched to GenLayer Bradbury Testnet ✓", "success");
 
-            // Build GenLayer JS client (fetch patch above ensures integer id)
+            // Build GenLayer JS client with a MetaMask-backed local account.
+            // Passing a local account object forces genlayer-js into the
+            // sign+sendRaw path, bypassing eth_sendTransaction (unsupported on
+            // the GenLayer Bradbury RPC).
+            const mmAccount = await buildMetaMaskAccount(userAddress);
             genLayerClient = createClient({
                 chain:   testnetBradbury,
-                account: userAddress,
+                account: mmAccount,
             });
 
             // Update connect button
@@ -252,7 +290,9 @@ document.addEventListener("DOMContentLoaded", () => {
             window.ethereum.on("accountsChanged", (accs) => {
                 if (accs.length === 0) { location.reload(); return; }
                 userAddress = accs[0];
-                genLayerClient = createClient({ chain: testnetBradbury, account: userAddress });
+                buildMetaMaskAccount(accs[0]).then(mmAcc => {
+                    genLayerClient = createClient({ chain: testnetBradbury, account: mmAcc });
+                });
                 if (btnConnect) btnConnect.textContent =
                     `${userAddress.slice(0, 6)}…${userAddress.slice(-4)}`;
                 log("Account changed: " + userAddress, "warn");
