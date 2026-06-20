@@ -27,7 +27,7 @@
     (function () {
         'use strict';
         var _origFetch = window.fetch;
-        var _rpcId = 1;
+        var _nextRpcId = 1;
 
         window.fetch = async function rpcIdPatch(input, init) {
             var url, method, bodyText;
@@ -49,26 +49,38 @@
             if (method === 'POST' && bodyText) {
                 try {
                     var body = JSON.parse(bodyText);
+                    var originalIds;
                     var changed = false;
 
-                    var fixId = function (obj) {
+                    var fixOne = function (obj, idx) {
                         if (obj && typeof obj === 'object' && 'id' in obj) {
                             var idType = typeof obj.id;
                             if (idType === 'string' || (idType === 'number' && obj.id > 2147483647)) {
-                                obj.id = _rpcId++;
+                                if (Array.isArray(body)) {
+                                    originalIds[idx] = obj.id;
+                                } else {
+                                    originalIds = obj.id;
+                                }
+                                obj.id = _nextRpcId++;
+                                if (_nextRpcId > 2000000000) {
+                                    _nextRpcId = 1;
+                                }
                                 changed = true;
                             }
                         }
                     };
 
                     if (Array.isArray(body)) {
-                        body.forEach(fixId);
+                        originalIds = [];
+                        body.forEach(fixOne);
                     } else if (body !== null && typeof body === 'object') {
-                        fixId(body);
+                        fixOne(body, 0);
                     }
 
                     if (changed) {
                         var newBody = JSON.stringify(body);
+                        var newRequest, newInit;
+
                         if (input && typeof input === 'object' && typeof input.clone === 'function') {
                             var initObj = {
                                 method: input.method,
@@ -83,10 +95,39 @@
                                 keepalive: input.keepalive,
                                 signal: input.signal
                             };
-                            input = new Request(input.url, initObj);
+                            newRequest = new Request(input.url, initObj);
+                            newInit = undefined;
                         } else {
-                            init = Object.assign({}, init || {}, { body: newBody });
+                            newRequest = input;
+                            newInit = Object.assign({}, init || {}, { body: newBody });
                         }
+
+                        var response = await _origFetch.call(this, newRequest, newInit);
+                        var responseText = await response.text();
+                        var responseBody;
+                        try {
+                            responseBody = JSON.parse(responseText);
+                            if (Array.isArray(responseBody)) {
+                                responseBody.forEach(function (obj, idx) {
+                                    if (obj && 'id' in obj && Array.isArray(originalIds) && originalIds[idx] !== undefined) {
+                                        obj.id = originalIds[idx];
+                                    }
+                                });
+                            } else if (responseBody && typeof responseBody === 'object' && 'id' in responseBody) {
+                                if (originalIds !== undefined) {
+                                    responseBody.id = originalIds;
+                                }
+                            }
+                        } catch (e) {
+                            responseBody = null;
+                        }
+
+                        var finalResponseText = responseBody ? JSON.stringify(responseBody) : responseText;
+                        return new Response(finalResponseText, {
+                            status: response.status,
+                            statusText: response.statusText,
+                            headers: response.headers
+                        });
                     }
                 } catch (e) {
                     // Non-JSON or parsing error
@@ -142,7 +183,7 @@
         @keyframes status-pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
         .status-live { animation: status-pulse 2s ease-in-out infinite; }
     </style>
-  <script type="module" crossorigin src="/assets/index-47aIuXbK.js"></script>
+  <script type="module" crossorigin src="/assets/index-rTkp1Jxg.js"></script>
 </head>
 <body class="bg-[#0b0c10] text-[#c5a059] min-h-screen flex flex-col selection:bg-[#45a29e] selection:text-black">
 

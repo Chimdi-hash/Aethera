@@ -32,22 +32,8 @@ const patchGenlayerRpcId = {
     },
 };
 
-// ── 2. Local dev proxy: /api/rpc → GenLayer RPC (also fixes any stray ids) ──
-function fixRpcId(body) {
-    const fixOne = (obj) => {
-        if (obj && typeof obj === "object" && "id" in obj) {
-            const n = Number(obj.id);
-            if (!Number.isNaN(n) && n <= 2147483647) {
-                obj.id = n;
-            } else {
-                obj.id = 1; // fallback to safe integer
-            }
-        }
-    };
-    if (Array.isArray(body)) body.forEach(fixOne);
-    else fixOne(body);
-    return body;
-}
+// ── 2. Local dev proxy: /api/rpc → GenLayer RPC (fixes & restores ids) ──
+let nextRpcId = 1;
 
 const genLayerRpcProxy = {
     name: "genlayer-rpc-proxy",
@@ -74,9 +60,40 @@ const genLayerRpcProxy = {
 
             let body;
             try {
-                body = fixRpcId(JSON.parse(rawBody));
+                body = JSON.parse(rawBody);
             } catch {
-                body = rawBody;
+                res.writeHead(400, { "Content-Type": "application/json" });
+                res.end(JSON.stringify({ jsonrpc: "2.0", id: 1, error: { code: -32700, message: "Parse error" } }));
+                return;
+            }
+
+            // Save original IDs and replace with sequential safe integers
+            let originalIds;
+            let changed = false;
+
+            const fixOne = (obj, idx) => {
+                if (obj && typeof obj === "object" && "id" in obj) {
+                    const idType = typeof obj.id;
+                    if (idType === "string" || (idType === "number" && obj.id > 2147483647)) {
+                        if (Array.isArray(body)) {
+                            originalIds[idx] = obj.id;
+                        } else {
+                            originalIds = obj.id;
+                        }
+                        obj.id = nextRpcId++;
+                        if (nextRpcId > 2000000000) {
+                            nextRpcId = 1;
+                        }
+                        changed = true;
+                    }
+                }
+            };
+
+            if (Array.isArray(body)) {
+                originalIds = [];
+                body.forEach(fixOne);
+            } else if (body && typeof body === "object") {
+                fixOne(body, 0);
             }
 
             try {
@@ -86,11 +103,44 @@ const genLayerRpcProxy = {
                     body: JSON.stringify(body),
                 });
                 const text = await upstream.text();
+                let responseBody;
+
+                if (changed) {
+                    try {
+                        responseBody = JSON.parse(text);
+                        if (Array.isArray(responseBody)) {
+                            responseBody.forEach((obj, idx) => {
+                                if (obj && "id" in obj && Array.isArray(originalIds) && originalIds[idx] !== undefined) {
+                                    obj.id = originalIds[idx];
+                                }
+                            });
+                        } else if (responseBody && typeof responseBody === "object" && "id" in responseBody) {
+                            if (originalIds !== undefined) {
+                                responseBody.id = originalIds;
+                            }
+                        }
+                    } catch {
+                        responseBody = null;
+                    }
+                }
+
+                const finalResponseText = responseBody ? JSON.stringify(responseBody) : text;
                 res.writeHead(upstream.status, { "Content-Type": "application/json" });
-                res.end(text);
+                res.end(finalResponseText);
             } catch (err) {
-                res.writeHead(502);
-                res.end(JSON.stringify({ error: { code: -32000, message: String(err) } }));
+                let fallbackId = 1;
+                if (changed) {
+                    if (Array.isArray(originalIds)) {
+                        fallbackId = originalIds[0] !== undefined ? originalIds[0] : 1;
+                    } else if (originalIds !== undefined) {
+                        fallbackId = originalIds;
+                    }
+                } else {
+                    fallbackId = Array.isArray(body) ? (body[0]?.id ?? 1) : (body?.id ?? 1);
+                }
+
+                res.writeHead(502, { "Content-Type": "application/json" });
+                res.end(JSON.stringify({ jsonrpc: "2.0", id: fallbackId, error: { code: -32000, message: String(err) } }));
             }
         });
     },

@@ -14,38 +14,9 @@ const CHAIN_ID_DEC      = 4221;
 const GENLAYER_RPC_URL  = "https://rpc.bradbury.genlayer.com";
 const PROXY_RPC_URL     = window.location.origin + "/api/rpc";
 
-// ── GUARANTEED FIX: window.fetch interceptor ─────────────────
-// genlayer-js uses `id: Date.now()` in every JSON-RPC request.
-// Date.now() returns ~1.78 trillion, which overflows Go's int32 (max ~2.1B).
-// The GenLayer server rejects it with "cannot unmarshal string into int".
-//
-// This interceptor runs BEFORE any genlayer-js code and patches ALL fetch
-// calls to rpc.bradbury.genlayer.com, replacing any id with a safe integer.
-// This runs in our page's JS context (not MetaMask's extension sandbox),
-// so it captures every genlayer-js fetch regardless of build configuration.
-(function installGenLayerFetchPatch() {
-    const TARGET = "rpc.bradbury.genlayer.com";
-    const _fetch = window.fetch.bind(window);
-
-    window.fetch = async function patchedFetch(resource, init) {
-        const url = resource instanceof Request ? resource.url : String(resource ?? "");
-
-        if (url.includes(TARGET) && init?.body) {
-            try {
-                const body = JSON.parse(init.body);
-                const fixId = (obj) => {
-                    if (obj && typeof obj === "object" && "id" in obj) {
-                        obj.id = 1;          // always safe for Go int32
-                    }
-                };
-                Array.isArray(body) ? body.forEach(fixId) : fixId(body);
-                init = { ...init, body: JSON.stringify(body) };
-            } catch { /* leave body unchanged if JSON parse fails */ }
-        }
-
-        return _fetch(resource, init);
-    };
-})();
+// Note: The window.fetch interceptor has been moved entirely to index.html
+// to ensure it executes synchronously in the global page context before
+// any ES modules are evaluated.
 
 // ── App state ───────────────────────────────────────────────
 let userAddress     = null;
@@ -224,8 +195,9 @@ document.addEventListener("DOMContentLoaded", () => {
             // no longer occurs. MetaMask's broadcasts go to the proxy URL set
             // via wallet_addEthereumChain.
             genLayerClient = createClient({
-                chain:   testnetBradbury,
-                account: userAddress,
+                chain:    testnetBradbury,
+                account:  userAddress,
+                endpoint: PROXY_RPC_URL,
             });
 
             if (btnConnect) {
@@ -242,7 +214,11 @@ document.addEventListener("DOMContentLoaded", () => {
             window.ethereum.on("accountsChanged", (accs) => {
                 if (accs.length === 0) { location.reload(); return; }
                 userAddress = accs[0];
-                genLayerClient = createClient({ chain: testnetBradbury, account: userAddress });
+                genLayerClient = createClient({
+                    chain:    testnetBradbury,
+                    account:  userAddress,
+                    endpoint: PROXY_RPC_URL,
+                });
                 if (btnConnect) btnConnect.textContent =
                     `${userAddress.slice(0, 6)}…${userAddress.slice(-4)}`;
                 log("Account changed: " + userAddress, "warn");
