@@ -158,7 +158,7 @@
                             newInit = Object.assign({}, init || {}, { body: newBody });
                         }
 
-                        var response = await _origFetch.call(this, newRequest, newInit);
+                        var response = await _origFetch.call(window, newRequest, newInit);
                         var responseText = await response.text();
                         var responseBody;
                         try {
@@ -192,7 +192,7 @@
                 }
             }
 
-            return _origFetch.call(this, input, init);
+            return _origFetch.call(window, input, init);
         };
     })();
     </script>
