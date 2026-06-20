@@ -82,17 +82,19 @@
             }
         };
 
+        var _ethereumInstance = null;
         if (window.ethereum) {
             patchEthereum(window.ethereum);
+            _ethereumInstance = window.ethereum;
         } else {
             Object.defineProperty(window, 'ethereum', {
                 configurable: true,
                 enumerable: true,
                 get: function () {
-                    return this._ethereum;
+                    return _ethereumInstance;
                 },
                 set: function (val) {
-                    this._ethereum = val;
+                    _ethereumInstance = val;
                     if (val) {
                         patchEthereum(val);
                     }
@@ -149,20 +151,7 @@
                         var newRequest, newInit;
 
                         if (input && typeof input === 'object' && typeof input.clone === 'function') {
-                            var initObj = {
-                                method: input.method,
-                                headers: new Headers(input.headers),
-                                body: newBody,
-                                mode: input.mode,
-                                credentials: input.credentials,
-                                cache: input.cache,
-                                redirect: input.redirect,
-                                referrer: input.referrer,
-                                integrity: input.integrity,
-                                keepalive: input.keepalive,
-                                signal: input.signal
-                            };
-                            newRequest = new Request(input.url, initObj);
+                            newRequest = new Request(input, { body: newBody });
                             newInit = undefined;
                         } else {
                             newRequest = input;
