@@ -29,36 +29,71 @@
         var _origFetch = window.fetch;
         var _rpcId = 1;
 
-        window.fetch = function rpcIdPatch(input, init) {
-            // Only process requests that have a JSON body
-            if (init && typeof init.body === 'string') {
+        window.fetch = async function rpcIdPatch(input, init) {
+            var url, method, bodyText;
+
+            if (input && typeof input === 'object' && typeof input.clone === 'function') {
+                url = input.url;
+                method = input.method;
                 try {
-                    var body = JSON.parse(init.body);
+                    bodyText = await input.clone().text();
+                } catch (e) {
+                    bodyText = null;
+                }
+            } else {
+                url = String(input || '');
+                method = (init && init.method) || 'GET';
+                bodyText = (init && typeof init.body === 'string') ? init.body : null;
+            }
+
+            if (method === 'POST' && bodyText) {
+                try {
+                    var body = JSON.parse(bodyText);
                     var changed = false;
 
-                    if (Array.isArray(body)) {
-                        // Batch JSON-RPC request
-                        body.forEach(function (req) {
-                            if (req && typeof req.id === 'string') {
-                                req.id = _rpcId++;
+                    var fixId = function (obj) {
+                        if (obj && typeof obj === 'object' && 'id' in obj) {
+                            var idType = typeof obj.id;
+                            if (idType === 'string' || (idType === 'number' && obj.id > 2147483647)) {
+                                obj.id = _rpcId++;
                                 changed = true;
                             }
-                        });
-                    } else if (body !== null && typeof body === 'object' &&
-                               typeof body.id === 'string') {
-                        // Single JSON-RPC request
-                        body.id = _rpcId++;
-                        changed = true;
+                        }
+                    };
+
+                    if (Array.isArray(body)) {
+                        body.forEach(fixId);
+                    } else if (body !== null && typeof body === 'object') {
+                        fixId(body);
                     }
 
                     if (changed) {
-                        init = Object.assign({}, init, { body: JSON.stringify(body) });
+                        var newBody = JSON.stringify(body);
+                        if (input && typeof input === 'object' && typeof input.clone === 'function') {
+                            var initObj = {
+                                method: input.method,
+                                headers: new Headers(input.headers),
+                                body: newBody,
+                                mode: input.mode,
+                                credentials: input.credentials,
+                                cache: input.cache,
+                                redirect: input.redirect,
+                                referrer: input.referrer,
+                                integrity: input.integrity,
+                                keepalive: input.keepalive,
+                                signal: input.signal
+                            };
+                            input = new Request(input.url, initObj);
+                        } else {
+                            init = Object.assign({}, init || {}, { body: newBody });
+                        }
                     }
-                } catch (_e) {
-                    // Non-JSON body — leave untouched
+                } catch (e) {
+                    // Non-JSON or parsing error
                 }
             }
-            return _origFetch.apply(this, arguments);
+
+            return _origFetch.call(this, input, init);
         };
     })();
     </script>
