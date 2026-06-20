@@ -3,105 +3,26 @@
 //  app.js — all DOM work happens inside DOMContentLoaded
 // ============================================================
 
-import { createClient }                              from "genlayer-js";
-import { testnetBradbury }                           from "genlayer-js/chains";
-import { TransactionStatus }                         from "genlayer-js/types";
-import { toAccount, serializeTransaction, keccak256 } from "viem";
+import { createClient }    from "genlayer-js";
+import { testnetBradbury } from "genlayer-js/chains";
+import { TransactionStatus } from "genlayer-js/types";
 
 // ── Config ──────────────────────────────────────────────────
 const CONTRACT_ADDRESS  = "0xA74b8A3D82BFDd52B41AFD2D16a961394804F958";
 const CHAIN_ID_HEX      = "0x107d";   // 4221
 const CHAIN_ID_DEC      = 4221;
-const RPC_URL           = "https://rpc.bradbury.genlayer.com";
+const GENLAYER_RPC_URL  = "https://rpc.bradbury.genlayer.com";
 
-// ── Direct RPC helper — id is always an integer ──────────────────────────────
-// GenLayer Bradbury's Go RPC rejects requests where `id` is a string.
-// Every call to the GenLayer RPC goes through here so we always control the id.
-async function rpcCall(method, params = []) {
-    const res = await fetch(RPC_URL, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
-    });
-    const data = await res.json();
-    if (data.error) throw Object.assign(new Error(data.error.message ?? "RPC error"), data.error);
-    return data.result;
-}
-
-// ── MetaMask-backed viem local account ───────────────────────────────────────
-// genlayer-js's _sendTransaction() has two code paths:
-//   A. account.type === "local"  → signTransaction() + eth_sendRawTransaction
-//   B. plain address string      → eth_sendTransaction directly on the RPC
+// ── Proxy RPC URL ────────────────────────────────────────────
+// The GenLayer Bradbury Go RPC rejects JSON-RPC requests where `id` is a
+// string. MetaMask sends string ids internally (e.g. "1") which we can't
+// intercept since it runs in the extension sandbox.
 //
-// The GenLayer Bradbury RPC does NOT support eth_sendTransaction (returns
-// "Method not supported"). Path A is the ONLY viable path.
-//
-// We create a viem "local account" object whose signTransaction() delegates
-// to MetaMask:
-//   1. Build the unsigned EIP-155 legacy tx with serializeTransaction (no sig)
-//   2. Hash it with keccak256
-//   3. Ask MetaMask to sign the hash via eth_sign (raw ECDSA, no prefix)
-//   4. Decode the 65-byte signature → {r, s, v}
-//   5. Re-serialize the tx WITH the signature → final signed hex
-//
-// genlayer-js then submits this via eth_sendRawTransaction using its own direct
-// fetch (with id: Date.now(), a valid integer) — no MetaMask relay involved.
-async function buildMetaMaskAccount(address) {
-    return toAccount({
-        address,
-
-        // Called by genlayer-js to produce the signed raw transaction bytes
-        async signTransaction(txRequest) {
-            // Build the EIP-155 unsigned transaction (no r/s/v)
-            const unsigned = {
-                type:     "legacy",
-                chainId:  txRequest.chainId ?? CHAIN_ID_DEC,
-                nonce:    txRequest.nonce,
-                gasPrice: txRequest.gasPrice,
-                gas:      txRequest.gas,
-                to:       txRequest.to,
-                value:    txRequest.value ?? 0n,
-                data:     txRequest.data ?? "0x",
-            };
-
-            // Serialize unsigned tx then hash it
-            const unsignedHex = serializeTransaction(unsigned);
-            const txHash      = keccak256(unsignedHex);
-
-            // Ask MetaMask to sign the raw hash (no "\x19Ethereum..." prefix)
-            const sigHex = await window.ethereum.request({
-                method: "eth_sign",
-                params: [address, txHash],
-            });
-
-            // Parse the 65-byte sig: r (32) | s (32) | v (1)
-            const sig = sigHex.slice(2); // strip 0x
-            const r   = `0x${sig.slice(0,  64)}`;
-            const s   = `0x${sig.slice(64, 128)}`;
-            const vRaw = parseInt(sig.slice(128, 130), 16);
-            // EIP-155 replay-protection: v = chainId*2 + 35 or 36
-            const v = BigInt(vRaw < 27 ? vRaw + CHAIN_ID_DEC * 2 + 35 : vRaw);
-
-            // Serialize WITH signature → signed raw tx
-            return serializeTransaction(unsigned, { r, s, v });
-        },
-
-        // MetaMask holds the private key — we never sign raw messages directly
-        async signMessage({ message }) {
-            return window.ethereum.request({
-                method: "personal_sign",
-                params: [typeof message === "string" ? message : message.raw, address],
-            });
-        },
-
-        async signTypedData(typedData) {
-            return window.ethereum.request({
-                method: "eth_signTypedData_v4",
-                params: [address, JSON.stringify(typedData)],
-            });
-        },
-    });
-}
+// FIX: We configure MetaMask to use OUR Vercel serverless function
+// (/api/rpc) as the chain RPC URL. That function coerces `id` to an integer
+// before forwarding to the real GenLayer RPC. All MetaMask traffic passes
+// through it automatically — no client-side monkey-patching needed.
+const PROXY_RPC_URL     = window.location.origin + "/api/rpc";
 
 // ── App state ───────────────────────────────────────────────
 let userAddress     = null;
@@ -205,10 +126,14 @@ document.addEventListener("DOMContentLoaded", () => {
         log("Aethera network infrastructure connected — GenLayer Bradbury Testnet.");
     }
 
-    // ── 2. Network switch helper (MetaMask native) ───────
+    // ── 2. Network switch helper ──────────────────────────
+    // We point MetaMask at PROXY_RPC_URL (our /api/rpc Vercel function).
+    // The proxy rewrites the JSON-RPC `id` to an integer before forwarding to
+    // the real GenLayer node. This means ALL MetaMask RPC traffic — including
+    // eth_sendTransaction relay — goes through the id-fixing proxy.
     async function ensureGenLayerNetwork() {
         const currentChainHex = await window.ethereum.request({ method: "eth_chainId" });
-        if (currentChainHex.toLowerCase() === CHAIN_ID_HEX.toLowerCase()) return; // already correct
+        if (currentChainHex.toLowerCase() === CHAIN_ID_HEX.toLowerCase()) return;
 
         log("Switching MetaMask to GenLayer Bradbury Testnet…");
         try {
@@ -217,7 +142,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 params: [{ chainId: CHAIN_ID_HEX }],
             });
         } catch (switchErr) {
-            // Chain not added yet — add it
+            // Chain not in MetaMask yet — add it pointing to OUR proxy URL
             if (switchErr.code === 4902 || switchErr.message?.includes("Unrecognized chain")) {
                 await window.ethereum.request({
                     method: "wallet_addEthereumChain",
@@ -225,7 +150,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         chainId:  CHAIN_ID_HEX,
                         chainName: "GenLayer Bradbury Testnet",
                         nativeCurrency: { name: "GEN", symbol: "GEN", decimals: 18 },
-                        rpcUrls: [RPC_URL],
+                        rpcUrls: [PROXY_RPC_URL],          // ← OUR proxy, not the raw RPC
                         blockExplorerUrls: ["https://studio.genlayer.com/"],
                     }],
                 });
@@ -234,14 +159,13 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }
 
-        // Confirm switch
         const confirmed = await window.ethereum.request({ method: "eth_chainId" });
         if (confirmed.toLowerCase() !== CHAIN_ID_HEX.toLowerCase()) {
             throw new Error("MetaMask did not switch to GenLayer Bradbury Testnet. Please switch manually.");
         }
     }
 
-    // ── 3. Connect wallet ────────────────────────────────
+    // ── 3. Connect wallet ─────────────────────────────────
     async function connectWallet() {
         if (typeof window.ethereum === "undefined") {
             log("MetaMask not detected. Please install MetaMask.", "error");
@@ -260,21 +184,18 @@ document.addEventListener("DOMContentLoaded", () => {
             userAddress = accounts[0];
             log(`Wallet connected: ${userAddress}`, "success");
 
-            // Switch to GenLayer network first
+            // Ensure MetaMask is on GenLayer (configured with proxy RPC URL)
             await ensureGenLayerNetwork();
             log("Switched to GenLayer Bradbury Testnet ✓", "success");
 
-            // Build GenLayer JS client with a MetaMask-backed local account.
-            // Passing a local account object forces genlayer-js into the
-            // sign+sendRaw path, bypassing eth_sendTransaction (unsupported on
-            // the GenLayer Bradbury RPC).
-            const mmAccount = await buildMetaMaskAccount(userAddress);
+            // Build genlayer-js client with a plain address string.
+            // genlayer-js routes eth_sendTransaction → MetaMask → our proxy RPC.
+            // The proxy coerces id to integer → GenLayer accepts the request.
             genLayerClient = createClient({
                 chain:   testnetBradbury,
-                account: mmAccount,
+                account: userAddress,
             });
 
-            // Update connect button
             if (btnConnect) {
                 btnConnect.textContent =
                     `${userAddress.slice(0, 6)}…${userAddress.slice(-4)}`;
@@ -286,13 +207,10 @@ document.addEventListener("DOMContentLoaded", () => {
             setSubmitReady(true);
             setStatus("WALLET CONNECTED", true);
 
-            // Listen for account/network changes
             window.ethereum.on("accountsChanged", (accs) => {
                 if (accs.length === 0) { location.reload(); return; }
                 userAddress = accs[0];
-                buildMetaMaskAccount(accs[0]).then(mmAcc => {
-                    genLayerClient = createClient({ chain: testnetBradbury, account: mmAcc });
-                });
+                genLayerClient = createClient({ chain: testnetBradbury, account: userAddress });
                 if (btnConnect) btnConnect.textContent =
                     `${userAddress.slice(0, 6)}…${userAddress.slice(-4)}`;
                 log("Account changed: " + userAddress, "warn");
@@ -326,7 +244,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    // ── 4. Send transaction ──────────────────────────────
+    // ── 4. Send transaction ───────────────────────────────
     async function handleSubmission(event) {
         if (event) event.preventDefault();
 
@@ -345,7 +263,6 @@ document.addEventListener("DOMContentLoaded", () => {
         if (txStatusBox) txStatusBox.classList.add("hidden");
 
         try {
-            // Make sure we're still on the right chain
             await ensureGenLayerNetwork();
 
             log(`Submitting: submit_and_evaluate("${targetUrl}")`);
@@ -361,7 +278,6 @@ document.addEventListener("DOMContentLoaded", () => {
             log(`Transaction sent! Hash: ${txHash}`, "success");
             showTxStatus(txHash, "PENDING");
 
-            // Poll for ACCEPTED
             log("Polling for consensus ACCEPTED status…");
             showTxStatus(txHash, "PROPOSING");
 
@@ -377,7 +293,6 @@ document.addEventListener("DOMContentLoaded", () => {
             if (liveUrl) liveUrl.textContent = `Last Validated Target: ${targetUrl}`;
             if (inputUrl) inputUrl.value = "";
 
-            // Optionally wait for FINALIZED
             log("Awaiting FINALIZED confirmation…");
             try {
                 await genLayerClient.waitForTransactionReceipt({
@@ -414,8 +329,11 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    // ── Bootstrap ────────────────────────────────────────
+    // ── 5. Wire up events ─────────────────────────────────
+    if (btnConnect) btnConnect.addEventListener("click", connectWallet);
+    if (submissionForm) submissionForm.addEventListener("submit", handleSubmission);
+    if (btnSubmit)  btnSubmit.addEventListener("click", handleSubmission);
+
+    // ── 6. Boot ───────────────────────────────────────────
     initAethera();
-    if (btnConnect)      btnConnect.addEventListener("click", connectWallet);
-    if (submissionForm)  submissionForm.addEventListener("submit", handleSubmission);
 });

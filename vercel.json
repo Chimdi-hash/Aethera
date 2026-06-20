@@ -2,14 +2,19 @@
     "version": 2,
     "buildCommand": "npm run build",
     "outputDirectory": "dist",
+    "functions": {
+        "api/rpc.js": {
+            "maxDuration": 30
+        }
+    },
     "rewrites": [
         {
-            "source": "/genlayer-rpc/(.*)",
-            "destination": "https://rpc.bradbury.genlayer.com/$1"
+            "source": "/api/rpc",
+            "destination": "/api/rpc"
         },
         {
-            "source": "/genlayer-rpc",
-            "destination": "https://rpc.bradbury.genlayer.com"
+            "source": "/(.*)",
+            "destination": "/index.html"
         }
     ]
 }
