@@ -30,24 +30,56 @@
         var _nextRpcId = 1;
 
         // Patch window.ethereum to sanitize eth_sendTransaction parameters for MetaMask/wallets
+        var sanitizeTxParams = function (tx) {
+            if (!tx || typeof tx !== 'object') return tx;
+            var cleanedTx = {};
+            if ('from' in tx) cleanedTx.from = tx.from;
+            if ('to' in tx) cleanedTx.to = tx.to;
+            if ('data' in tx) cleanedTx.data = tx.data;
+            if ('value' in tx) cleanedTx.value = tx.value;
+            if ('gas' in tx) cleanedTx.gas = tx.gas;
+            return cleanedTx;
+        };
+
         var patchEthereum = function (provider) {
             if (!provider || provider._ethSendTxPatched) return;
             provider._ethSendTxPatched = true;
 
-            var _origRequest = provider.request;
-            provider.request = async function (args) {
-                if (args && args.method === 'eth_sendTransaction' && Array.isArray(args.params) && args.params[0]) {
-                    var tx = args.params[0];
-                    var cleanedTx = {};
-                    if ('from' in tx) cleanedTx.from = tx.from;
-                    if ('to' in tx) cleanedTx.to = tx.to;
-                    if ('data' in tx) cleanedTx.data = tx.data;
-                    if ('value' in tx) cleanedTx.value = tx.value;
-                    if ('gas' in tx) cleanedTx.gas = tx.gas;
-                    args.params[0] = cleanedTx;
-                }
-                return _origRequest.apply(this, arguments);
-            };
+            // 1. Patch request
+            if (typeof provider.request === 'function') {
+                var _origRequest = provider.request;
+                provider.request = async function (args) {
+                    if (args && args.method === 'eth_sendTransaction' && Array.isArray(args.params) && args.params[0]) {
+                        args.params[0] = sanitizeTxParams(args.params[0]);
+                    }
+                    return _origRequest.apply(this, arguments);
+                };
+            }
+
+            // 2. Patch sendAsync
+            if (typeof provider.sendAsync === 'function') {
+                var _origSendAsync = provider.sendAsync;
+                provider.sendAsync = function (payload, callback) {
+                    if (payload && payload.method === 'eth_sendTransaction' && Array.isArray(payload.params) && payload.params[0]) {
+                        payload.params[0] = sanitizeTxParams(payload.params[0]);
+                    }
+                    return _origSendAsync.apply(this, arguments);
+                };
+            }
+
+            // 3. Patch send
+            if (typeof provider.send === 'function') {
+                var _origSend = provider.send;
+                provider.send = function (arg1, arg2) {
+                    if (arg1 && typeof arg1 === 'object' && arg1.method === 'eth_sendTransaction' && Array.isArray(arg1.params) && arg1.params[0]) {
+                        arg1.params[0] = sanitizeTxParams(arg1.params[0]);
+                    }
+                    else if (typeof arg1 === 'string' && arg1 === 'eth_sendTransaction' && Array.isArray(arg2) && arg2[0]) {
+                        arg2[0] = sanitizeTxParams(arg2[0]);
+                    }
+                    return _origSend.apply(this, arguments);
+                };
+            }
         };
 
         if (window.ethereum) {
@@ -220,7 +252,7 @@
         @keyframes status-pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
         .status-live { animation: status-pulse 2s ease-in-out infinite; }
     </style>
-  <script type="module" crossorigin src="/assets/index-rTkp1Jxg.js"></script>
+  <script type="module" crossorigin src="/assets/index-CQWWb629.js"></script>
 </head>
 <body class="bg-[#0b0c10] text-[#c5a059] min-h-screen flex flex-col selection:bg-[#45a29e] selection:text-black">
 

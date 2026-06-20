@@ -8,7 +8,7 @@
 
 export const config = { runtime: "edge" };
 
-const UPSTREAM = "https://rpc.bradbury.genlayer.com";
+const UPSTREAM = "https://rpc-bradbury.genlayer.com";
 
 const CORS = {
     "Access-Control-Allow-Origin":  "*",

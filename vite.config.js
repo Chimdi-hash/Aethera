@@ -18,7 +18,7 @@
 
 import { defineConfig } from "vite";
 
-const GENLAYER_RPC = "https://rpc.bradbury.genlayer.com";
+const GENLAYER_RPC = "https://rpc-bradbury.genlayer.com";
 
 // ── 1. Fix Date.now() → 1 in genlayer-js bundle ─────────────────────────────
 const patchGenlayerRpcId = {
