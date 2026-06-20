@@ -1,13 +1,14 @@
-// api/rpc.js — Vercel Serverless Function (Node.js)
+// api/rpc.js — Vercel Serverless Function (Node.js, ESM)
 // Proxies JSON-RPC to GenLayer Bradbury, clamping/restoring the `id` field.
 //
-// Uses CommonJS (module.exports) for maximum Vercel @vercel/node compatibility.
+// This file MUST use ESM syntax (export default) because package.json
+// specifies "type": "module".
 
 const UPSTREAM = "https://rpc-bradbury.genlayer.com";
 
 let nextRpcId = 1;
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
     // Set CORS headers
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -21,33 +22,39 @@ module.exports = async function handler(req, res) {
         return res.status(405).json({ error: "Method Not Allowed" });
     }
 
-    // Vercel Node.js runtime automatically parses JSON bodies, so req.body is already an object.
-    // If it's a string, we parse it just in case.
+    // Vercel Node.js runtime auto-parses JSON bodies → req.body is already an object.
+    // If it's a string, parse it manually.
     let body = req.body;
     if (typeof body === "string") {
         try {
             body = JSON.parse(body);
         } catch {
-            return res.status(400).json({ jsonrpc: "2.0", id: 1, error: { code: -32700, message: "Parse error" } });
+            return res.status(400).json({
+                jsonrpc: "2.0", id: 1,
+                error: { code: -32700, message: "Parse error" },
+            });
         }
     }
 
     if (!body) {
-        return res.status(400).json({ jsonrpc: "2.0", id: 1, error: { code: -32700, message: "Parse error" } });
+        return res.status(400).json({
+            jsonrpc: "2.0", id: 1,
+            error: { code: -32700, message: "Empty body" },
+        });
     }
 
     // Save original IDs and replace with sequential safe integers
-    const originalIdsMap = {}; // Maps: newIntId -> originalId
+    const originalIdsMap = {}; // newIntId → originalId
     let changed = false;
 
     const fixOne = (obj) => {
         if (obj && typeof obj === "object" && "id" in obj) {
             const idType = typeof obj.id;
+            // GenLayer's Go server rejects string IDs. Large ints are fine but
+            // we clamp them too for safety.
             if (idType === "string" || (idType === "number" && obj.id > 2147483647)) {
                 const newId = nextRpcId++;
-                if (nextRpcId > 2000000000) {
-                    nextRpcId = 1;
-                }
+                if (nextRpcId > 2_000_000_000) nextRpcId = 1;
                 originalIdsMap[newId] = obj.id;
                 obj.id = newId;
                 changed = true;
@@ -57,22 +64,19 @@ module.exports = async function handler(req, res) {
 
     if (Array.isArray(body)) {
         body.forEach(fixOne);
-    } else if (body && typeof body === "object") {
+    } else {
         fixOne(body);
     }
 
     try {
-        const upstreamResponse = await fetch(UPSTREAM, {
+        const upstreamRes = await fetch(UPSTREAM, {
             method: "POST",
-            headers: { 
-                "Content-Type": "application/json",
-                "User-Agent": "AetheraDapp/1.0"
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
         });
 
-        const text = await upstreamResponse.text();
-        let responseBody;
+        const text = await upstreamRes.text();
+        let responseBody = null;
 
         if (changed) {
             try {
@@ -80,9 +84,7 @@ module.exports = async function handler(req, res) {
                 const restoreOne = (obj) => {
                     if (obj && typeof obj === "object" && "id" in obj) {
                         const origId = originalIdsMap[obj.id];
-                        if (origId !== undefined) {
-                            obj.id = origId;
-                        }
+                        if (origId !== undefined) obj.id = origId;
                     }
                 };
                 if (Array.isArray(responseBody)) {
@@ -95,11 +97,12 @@ module.exports = async function handler(req, res) {
             }
         }
 
-        const finalResponseText = responseBody ? JSON.stringify(responseBody) : text;
-        res.status(upstreamResponse.status);
+        const finalText = responseBody ? JSON.stringify(responseBody) : text;
+        res.status(upstreamRes.status);
         res.setHeader("Content-Type", "application/json");
-        return res.send(finalResponseText);
+        return res.send(finalText);
     } catch (err) {
+        // Network error reaching upstream
         let fallbackId = 1;
         if (changed) {
             const firstKey = Object.keys(originalIdsMap)[0];
@@ -108,6 +111,9 @@ module.exports = async function handler(req, res) {
             fallbackId = Array.isArray(body) ? (body[0]?.id ?? 1) : (body?.id ?? 1);
         }
 
-        return res.status(502).json({ jsonrpc: "2.0", id: fallbackId, error: { code: -32000, message: String(err) } });
+        return res.status(502).json({
+            jsonrpc: "2.0", id: fallbackId,
+            error: { code: -32000, message: `Upstream error: ${err.message || err}` },
+        });
     }
-};
+}
