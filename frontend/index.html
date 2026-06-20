@@ -6,8 +6,65 @@
     <title>Aethera Hub // GenLayer Bradbury Testnet</title>
     <meta name="description" content="Aethera — decentralized consensus diagnostics platform powered by the GenLayer Bradbury Testnet intelligent contracts.">
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Single module script — no duplicates -->
-    <script type="module" src="app.js" defer></script>
+
+    <!--
+      CRITICAL: This MUST be a plain <script>, NOT type="module".
+      Plain scripts run synchronously and BEFORE any ES module is evaluated.
+      ES modules (including genlayer-js / viem) are always deferred, so by
+      the time app.js runs, this patch is already in place.
+
+      Root cause: viem@2 generates string UIDs for JSON-RPC request `id`
+      fields (e.g. "id":"3k9x2a"), but GenLayer's Go RPC server declares
+      the field as `int` and rejects any non-integer, returning:
+        "json: cannot unmarshal string into Go struct field Request.id of type int"
+
+      Fix: intercept every outgoing fetch, and if the JSON body contains a
+      string `id` in a JSON-RPC envelope, replace it with an integer.
+      This is safe because we only change `id` when it IS a string — valid
+      JSON-RPC 2.0 allows string IDs but GenLayer's implementation does not.
+    -->
+    <script>
+    (function () {
+        'use strict';
+        var _origFetch = window.fetch;
+        var _rpcId = 1;
+
+        window.fetch = function rpcIdPatch(input, init) {
+            // Only process requests that have a JSON body
+            if (init && typeof init.body === 'string') {
+                try {
+                    var body = JSON.parse(init.body);
+                    var changed = false;
+
+                    if (Array.isArray(body)) {
+                        // Batch JSON-RPC request
+                        body.forEach(function (req) {
+                            if (req && typeof req.id === 'string') {
+                                req.id = _rpcId++;
+                                changed = true;
+                            }
+                        });
+                    } else if (body !== null && typeof body === 'object' &&
+                               typeof body.id === 'string') {
+                        // Single JSON-RPC request
+                        body.id = _rpcId++;
+                        changed = true;
+                    }
+
+                    if (changed) {
+                        init = Object.assign({}, init, { body: JSON.stringify(body) });
+                    }
+                } catch (_e) {
+                    // Non-JSON body — leave untouched
+                }
+            }
+            return _origFetch.apply(this, arguments);
+        };
+    })();
+    </script>
+
+    <!-- ES module — runs after the inline patch above -->
+    <script type="module" src="app.js"></script>
     <style>
         body { font-family: 'JetBrains Mono', 'Fira Code', monospace; }
 

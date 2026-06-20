@@ -13,45 +13,6 @@ const CHAIN_ID_HEX      = "0x107d";   // 4221
 const CHAIN_ID_DEC      = 4221;
 const RPC_URL           = "https://rpc.bradbury.genlayer.com";
 
-// ── Fix: viem@2 uses string UIDs for JSON-RPC `id` fields,
-//    but GenLayer's Go RPC server requires integer IDs.
-//    This intercepts all fetch calls to the GenLayer RPC and
-//    converts any string `id` → integer before the request is sent.
-// ────────────────────────────────────────────────────────────
-;(function patchFetchForGenLayerRPC() {
-    const RPC_PATTERNS = [
-        "rpc.bradbury.genlayer.com",
-        "rpc.asimov.genlayer.com",
-        "/genlayer-rpc",
-    ];
-    let _idCounter = 1;
-    const _origFetch = window.fetch.bind(window);
-
-    window.fetch = async function patchedFetch(input, init) {
-        // Only intercept requests going to a GenLayer RPC endpoint
-        const url = (typeof input === "string") ? input : (input?.url ?? "");
-        const isGenLayerRpc = RPC_PATTERNS.some((p) => url.includes(p));
-
-        if (isGenLayerRpc && init?.body && typeof init.body === "string") {
-            try {
-                const body = JSON.parse(init.body);
-                // viem sends either a single request object or a batch array
-                if (Array.isArray(body)) {
-                    body.forEach((req) => {
-                        if (typeof req.id === "string") req.id = _idCounter++;
-                    });
-                } else if (body && typeof body.id === "string") {
-                    body.id = _idCounter++;
-                }
-                init = { ...init, body: JSON.stringify(body) };
-            } catch {
-                // If parse fails leave the body untouched
-            }
-        }
-        return _origFetch(input, init);
-    };
-})();
-
 // ── App state ───────────────────────────────────────────────
 let userAddress     = null;
 let genLayerClient  = null;
