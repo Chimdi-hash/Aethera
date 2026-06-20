@@ -195,12 +195,16 @@ document.addEventListener("DOMContentLoaded", () => {
             await ensureGenLayerNetwork();
             log("Switched to GenLayer Bradbury Testnet ✓", "success");
 
-            // Build genlayer-js client with a plain address string.
-            // genlayer-js routes eth_sendTransaction → MetaMask → our proxy RPC.
-            // The proxy coerces id to integer → GenLayer accepts the request.
+            // Build genlayer-js client.
+            // endpoint: PROXY_RPC_URL routes ALL genlayer-js direct RPC calls
+            // (eth_estimateGas, eth_gasPrice, eth_sendRawTransaction, etc.)
+            // through our Vercel function at /api/rpc which always sends id:1.
+            // MetaMask is also configured with this proxy URL so its broadcasts
+            // also go through the same function.
             genLayerClient = createClient({
-                chain:   testnetBradbury,
-                account: userAddress,
+                chain:    testnetBradbury,
+                account:  userAddress,
+                endpoint: PROXY_RPC_URL,
             });
 
             if (btnConnect) {
@@ -217,7 +221,7 @@ document.addEventListener("DOMContentLoaded", () => {
             window.ethereum.on("accountsChanged", (accs) => {
                 if (accs.length === 0) { location.reload(); return; }
                 userAddress = accs[0];
-                genLayerClient = createClient({ chain: testnetBradbury, account: userAddress });
+                genLayerClient = createClient({ chain: testnetBradbury, account: userAddress, endpoint: PROXY_RPC_URL });
                 if (btnConnect) btnConnect.textContent =
                     `${userAddress.slice(0, 6)}…${userAddress.slice(-4)}`;
                 log("Account changed: " + userAddress, "warn");

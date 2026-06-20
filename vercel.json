@@ -9,11 +9,7 @@
     },
     "rewrites": [
         {
-            "source": "/api/rpc",
-            "destination": "/api/rpc"
-        },
-        {
-            "source": "/(.*)",
+            "source": "/((?!api/).*)",
             "destination": "/index.html"
         }
     ]
