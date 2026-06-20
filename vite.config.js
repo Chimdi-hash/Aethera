@@ -68,32 +68,28 @@ const genLayerRpcProxy = {
             }
 
             // Save original IDs and replace with sequential safe integers
-            let originalIds;
+            let originalIdsMap = {}; // Maps: newIntId -> originalId
             let changed = false;
 
-            const fixOne = (obj, idx) => {
+            const fixOne = (obj) => {
                 if (obj && typeof obj === "object" && "id" in obj) {
                     const idType = typeof obj.id;
                     if (idType === "string" || (idType === "number" && obj.id > 2147483647)) {
-                        if (Array.isArray(body)) {
-                            originalIds[idx] = obj.id;
-                        } else {
-                            originalIds = obj.id;
-                        }
-                        obj.id = nextRpcId++;
+                        const newId = nextRpcId++;
                         if (nextRpcId > 2000000000) {
                             nextRpcId = 1;
                         }
+                        originalIdsMap[newId] = obj.id;
+                        obj.id = newId;
                         changed = true;
                     }
                 }
             };
 
             if (Array.isArray(body)) {
-                originalIds = [];
                 body.forEach(fixOne);
             } else if (body && typeof body === "object") {
-                fixOne(body, 0);
+                fixOne(body);
             }
 
             try {
@@ -108,16 +104,18 @@ const genLayerRpcProxy = {
                 if (changed) {
                     try {
                         responseBody = JSON.parse(text);
-                        if (Array.isArray(responseBody)) {
-                            responseBody.forEach((obj, idx) => {
-                                if (obj && "id" in obj && Array.isArray(originalIds) && originalIds[idx] !== undefined) {
-                                    obj.id = originalIds[idx];
+                        const restoreOne = (obj) => {
+                            if (obj && typeof obj === "object" && "id" in obj) {
+                                const origId = originalIdsMap[obj.id];
+                                if (origId !== undefined) {
+                                    obj.id = origId;
                                 }
-                            });
-                        } else if (responseBody && typeof responseBody === "object" && "id" in responseBody) {
-                            if (originalIds !== undefined) {
-                                responseBody.id = originalIds;
                             }
+                        };
+                        if (Array.isArray(responseBody)) {
+                            responseBody.forEach(restoreOne);
+                        } else if (responseBody && typeof responseBody === "object") {
+                            restoreOne(responseBody);
                         }
                     } catch {
                         responseBody = null;
@@ -130,11 +128,8 @@ const genLayerRpcProxy = {
             } catch (err) {
                 let fallbackId = 1;
                 if (changed) {
-                    if (Array.isArray(originalIds)) {
-                        fallbackId = originalIds[0] !== undefined ? originalIds[0] : 1;
-                    } else if (originalIds !== undefined) {
-                        fallbackId = originalIds;
-                    }
+                    const firstKey = Object.keys(originalIdsMap)[0];
+                    fallbackId = firstKey !== undefined ? originalIdsMap[firstKey] : 1;
                 } else {
                     fallbackId = Array.isArray(body) ? (body[0]?.id ?? 1) : (body?.id ?? 1);
                 }

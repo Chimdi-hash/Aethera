@@ -49,32 +49,28 @@
             if (method === 'POST' && bodyText) {
                 try {
                     var body = JSON.parse(bodyText);
-                    var originalIds;
+                    var originalIdsMap = {}; // Maps: newIntId -> originalId
                     var changed = false;
 
-                    var fixOne = function (obj, idx) {
+                    var fixOne = function (obj) {
                         if (obj && typeof obj === 'object' && 'id' in obj) {
                             var idType = typeof obj.id;
                             if (idType === 'string' || (idType === 'number' && obj.id > 2147483647)) {
-                                if (Array.isArray(body)) {
-                                    originalIds[idx] = obj.id;
-                                } else {
-                                    originalIds = obj.id;
-                                }
-                                obj.id = _nextRpcId++;
+                                var newId = _nextRpcId++;
                                 if (_nextRpcId > 2000000000) {
                                     _nextRpcId = 1;
                                 }
+                                originalIdsMap[newId] = obj.id;
+                                obj.id = newId;
                                 changed = true;
                             }
                         }
                     };
 
                     if (Array.isArray(body)) {
-                        originalIds = [];
                         body.forEach(fixOne);
                     } else if (body !== null && typeof body === 'object') {
-                        fixOne(body, 0);
+                        fixOne(body);
                     }
 
                     if (changed) {
@@ -107,16 +103,18 @@
                         var responseBody;
                         try {
                             responseBody = JSON.parse(responseText);
-                            if (Array.isArray(responseBody)) {
-                                responseBody.forEach(function (obj, idx) {
-                                    if (obj && 'id' in obj && Array.isArray(originalIds) && originalIds[idx] !== undefined) {
-                                        obj.id = originalIds[idx];
+                            var restoreOne = function (obj) {
+                                if (obj && typeof obj === 'object' && 'id' in obj) {
+                                    var origId = originalIdsMap[obj.id];
+                                    if (origId !== undefined) {
+                                        obj.id = origId;
                                     }
-                                });
-                            } else if (responseBody && typeof responseBody === 'object' && 'id' in responseBody) {
-                                if (originalIds !== undefined) {
-                                    responseBody.id = originalIds;
                                 }
+                            };
+                            if (Array.isArray(responseBody)) {
+                                responseBody.forEach(restoreOne);
+                            } else if (responseBody && typeof responseBody === 'object') {
+                                restoreOne(responseBody);
                             }
                         } catch (e) {
                             responseBody = null;
