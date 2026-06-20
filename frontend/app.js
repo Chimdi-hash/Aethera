@@ -23,7 +23,7 @@ let userAddress     = null;
 let genLayerClient  = null;
 
 // ── ALL logic is deferred until the DOM is ready ────────────
-document.addEventListener("DOMContentLoaded", () => {
+function startApp() {
 
     // ── DOM refs (safe here — body is fully parsed) ──────
     const statusBadge   = document.getElementById("status-badge");
@@ -373,4 +373,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // ── 6. Boot ───────────────────────────────────────────
     initAethera();
-});
+}
+
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", startApp);
+} else {
+    startApp();
+}
