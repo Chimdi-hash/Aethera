@@ -6,32 +6,54 @@
 import { createClient }    from "genlayer-js";
 import { testnetBradbury } from "genlayer-js/chains";
 import { TransactionStatus } from "genlayer-js/types";
-import { custom } from "viem";
-
-// ── Custom transport: coerce JSON-RPC `id` string → integer ─────────────────
-// GenLayer Bradbury Testnet RPC strictly requires id to be an int, but viem
-// sends it as a string (e.g. "1"). This intercepts every request and fixes it.
-function makeIntIdTransport() {
-    return custom({
-        async request({ method, params }) {
-            const body = JSON.stringify({ jsonrpc: "2.0", id: 1, method, params });
-            const res = await fetch(RPC_URL, {
-                method:  "POST",
-                headers: { "Content-Type": "application/json" },
-                body,
-            });
-            const json = await res.json();
-            if (json.error) throw json.error;
-            return json.result;
-        },
-    });
-}
 
 // ── Config ──────────────────────────────────────────────────
 const CONTRACT_ADDRESS  = "0xA74b8A3D82BFDd52B41AFD2D16a961394804F958";
 const CHAIN_ID_HEX      = "0x107d";   // 4221
 const CHAIN_ID_DEC      = 4221;
 const RPC_URL           = "https://rpc.bradbury.genlayer.com";
+
+// ── Global fetch patch: coerce JSON-RPC `id` → integer ──────────────────────
+// The GenLayer Bradbury Testnet Go RPC server rejects requests where `id` is
+// a string (e.g. "1" or a stringified timestamp). Both MetaMask's relay and
+// genlayer-js itself can emit non-integer ids. Patching fetch globally is the
+// only reliable interception point that covers all code paths.
+;(function patchFetchForGenLayerRpc() {
+    const _fetch = window.fetch.bind(window);
+    window.fetch = async function (input, init) {
+        const url = typeof input === "string" ? input : (input instanceof URL ? input.href : input.url);
+        if (url && url.includes("genlayer.com") && init?.body && typeof init.body === "string") {
+            try {
+                const parsed = JSON.parse(init.body);
+                let patched = false;
+
+                function fixId(obj) {
+                    if (obj && typeof obj === "object" && "id" in obj) {
+                        const asNum = Number(obj.id);
+                        if (!Number.isNaN(asNum) && obj.id !== asNum) {
+                            obj.id = asNum;
+                            patched = true;
+                        }
+                    }
+                }
+
+                if (Array.isArray(parsed)) {
+                    parsed.forEach(fixId);
+                } else {
+                    fixId(parsed);
+                }
+
+                if (patched) {
+                    init = { ...init, body: JSON.stringify(parsed) };
+                }
+            } catch {
+                // not JSON — leave as-is
+            }
+        }
+        return _fetch(input, init);
+    };
+}());
+
 
 // ── App state ───────────────────────────────────────────────
 let userAddress     = null;
@@ -194,11 +216,10 @@ document.addEventListener("DOMContentLoaded", () => {
             await ensureGenLayerNetwork();
             log("Switched to GenLayer Bradbury Testnet ✓", "success");
 
-            // Build GenLayer JS client with custom transport that sends id as int
+            // Build GenLayer JS client (fetch patch above ensures integer id)
             genLayerClient = createClient({
-                chain:     testnetBradbury,
-                account:   userAddress,
-                transport: makeIntIdTransport(),
+                chain:   testnetBradbury,
+                account: userAddress,
             });
 
             // Update connect button
@@ -217,7 +238,7 @@ document.addEventListener("DOMContentLoaded", () => {
             window.ethereum.on("accountsChanged", (accs) => {
                 if (accs.length === 0) { location.reload(); return; }
                 userAddress = accs[0];
-                genLayerClient = createClient({ chain: testnetBradbury, account: userAddress, transport: makeIntIdTransport() });
+                genLayerClient = createClient({ chain: testnetBradbury, account: userAddress });
                 if (btnConnect) btnConnect.textContent =
                     `${userAddress.slice(0, 6)}…${userAddress.slice(-4)}`;
                 log("Account changed: " + userAddress, "warn");
