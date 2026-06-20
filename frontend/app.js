@@ -139,6 +139,19 @@ function startApp() {
             if (liveCriteria) liveCriteria.textContent =
                 "Active Rules: Verify content authenticity via GitHub commits link.";
             log("Aethera network infrastructure connected — GenLayer Bradbury Testnet.", "success");
+
+            // Auto-connect if already authorized in MetaMask
+            if (typeof window.ethereum !== "undefined") {
+                try {
+                    const accounts = await window.ethereum.request({ method: "eth_accounts" });
+                    if (accounts && accounts.length > 0) {
+                        log("Restoring previous wallet session…");
+                        await connectWallet();
+                    }
+                } catch (e) {
+                    // Ignore silent check errors
+                }
+            }
         } catch (err) {
             setStatus("NODE OFFLINE", false);
             if (liveTitle) liveTitle.textContent = "Unable to reach GenLayer node";
@@ -218,11 +231,7 @@ function startApp() {
             await ensureGenLayerNetwork();
             log("Switched to GenLayer Bradbury Testnet ✓", "success");
 
-            // endpoint NOT set here — genlayer-js calls GenLayer directly.
-            // id: Date.now() is patched to id:1 by the Vite transform plugin
-            // (patchGenlayerRpcId in vite.config.js), so the Go int32 overflow
-            // no longer occurs. MetaMask's broadcasts go to the proxy URL set
-            // via wallet_addEthereumChain.
+            // Create client pointing to proxy RPC URL
             genLayerClient = createClient({
                 chain:    testnetBradbury,
                 account:  userAddress,
@@ -239,6 +248,13 @@ function startApp() {
 
             setSubmitReady(true);
             setStatus("WALLET CONNECTED", true);
+
+            // Auto-resume active transaction tracking if exists in localStorage
+            const activeTx = localStorage.getItem("aethera_active_tx");
+            if (activeTx) {
+                log(`Resuming tracking for stored transaction: ${activeTx}`, "warn");
+                trackTransaction(activeTx);
+            }
 
             window.ethereum.on("accountsChanged", (accs) => {
                 if (accs.length === 0) { location.reload(); return; }
@@ -281,7 +297,83 @@ function startApp() {
         }
     }
 
-    // ── 4. Send transaction ───────────────────────────────
+    // ── 4. Track transaction status robustly ─────────────
+    async function trackTransaction(txHash) {
+        if (!txHash) return;
+        localStorage.setItem("aethera_active_tx", txHash);
+
+        if (txStatusBox) txStatusBox.classList.remove("hidden");
+        showTxStatus(txHash, "PENDING");
+        setSubmitReady(false);
+        if (btnSubmit) btnSubmit.textContent = "TRACKING TRANSACTION…";
+
+        log(`Started tracking transaction: ${txHash}`);
+
+        let retries = 180; // 180 retries * 5s = 15 minutes of tracking
+        let interval = 5000;
+        let lastLoggedStatus = "";
+
+        while (retries > 0) {
+            if (!genLayerClient) {
+                // If user disconnected or client is not ready, retry after a delay
+                await new Promise(resolve => setTimeout(resolve, interval));
+                continue;
+            }
+
+            try {
+                const tx = await genLayerClient.getTransaction({ hash: txHash });
+                if (tx && tx.statusName) {
+                    const statusName = tx.statusName;
+                    showTxStatus(txHash, statusName);
+
+                    if (statusName !== lastLoggedStatus) {
+                        log(`Consensus state changed: ${statusName}`, "info");
+                        lastLoggedStatus = statusName;
+                    }
+
+                    if (statusName === "ACCEPTED") {
+                        log("Consensus ACCEPTED ✓ — AI evaluation complete.", "success");
+                        if (liveUrl) liveUrl.textContent = `Last Validated: ${txHash.slice(0, 10)}...${txHash.slice(-8)}`;
+                    } else if (statusName === "FINALIZED") {
+                        log("Transaction FINALIZED on Bradbury Testnet ✓", "success");
+                        showTxStatus(txHash, "FINALIZED");
+                        localStorage.removeItem("aethera_active_tx");
+                        setSubmitReady(true);
+                        return; // Tracking complete
+                    } else if (["CANCELED", "VALIDATORS_TIMEOUT", "LEADER_TIMEOUT", "UNDETERMINED"].includes(statusName)) {
+                        log(`Transaction finished with non-success state: ${statusName}`, "warn");
+                        localStorage.removeItem("aethera_active_tx");
+                        setSubmitReady(true);
+                        return; // Tracking complete
+                    }
+                } else {
+                    if (lastLoggedStatus !== "UNKNOWN") {
+                        log("Transaction found but status is uninitialized or empty.", "warn");
+                        lastLoggedStatus = "UNKNOWN";
+                    }
+                }
+            } catch (err) {
+                const errMsg = err?.message || String(err);
+                if (errMsg.includes("not found") || errMsg.includes("does not exist") || errMsg.includes("404")) {
+                    if (lastLoggedStatus !== "NOT_FOUND_YET") {
+                        log("Transaction not indexed on RPC node yet — waiting…", "warn");
+                        lastLoggedStatus = "NOT_FOUND_YET";
+                    }
+                } else {
+                    log(`Telemetry query warning: ${errMsg}`, "warn");
+                }
+            }
+
+            await new Promise(resolve => setTimeout(resolve, interval));
+            retries--;
+        }
+
+        log("Consensus monitoring timed out. The transaction may still finalize on the network. Check again later.", "warn");
+        localStorage.removeItem("aethera_active_tx");
+        setSubmitReady(true);
+    }
+
+    // ── 5. Send transaction ───────────────────────────────
     async function handleSubmission(event) {
         if (event) event.preventDefault();
 
@@ -295,7 +387,7 @@ function startApp() {
             return;
         }
 
-        btnSubmit.disabled = true;
+        setSubmitReady(false);
         btnSubmit.textContent = "BROADCASTING…";
         if (txStatusBox) txStatusBox.classList.add("hidden");
 
@@ -313,36 +405,10 @@ function startApp() {
             });
 
             log(`Transaction sent! Hash: ${txHash}`, "success");
-            showTxStatus(txHash, "PENDING");
-
-            log("Polling for consensus ACCEPTED status…");
-            showTxStatus(txHash, "PROPOSING");
-
-            await genLayerClient.waitForTransactionReceipt({
-                hash:     txHash,
-                status:   TransactionStatus.ACCEPTED,
-                interval: 5_000,
-                retries:  30,
-            });
-
-            showTxStatus(txHash, "ACCEPTED");
-            log("Consensus ACCEPTED ✓ — AI evaluation complete.", "success");
-            if (liveUrl) liveUrl.textContent = `Last Validated Target: ${targetUrl}`;
             if (inputUrl) inputUrl.value = "";
 
-            log("Awaiting FINALIZED confirmation…");
-            try {
-                await genLayerClient.waitForTransactionReceipt({
-                    hash:     txHash,
-                    status:   TransactionStatus.FINALIZED,
-                    interval: 6_000,
-                    retries:  20,
-                });
-                showTxStatus(txHash, "FINALIZED");
-                log("Transaction FINALIZED on Bradbury Testnet ✓", "success");
-            } catch {
-                log("Finalization still pending (ACCEPTED is sufficient).", "warn");
-            }
+            // Start tracking the transaction
+            await trackTransaction(txHash);
 
         } catch (err) {
             const msg = err?.message || String(err);
@@ -355,13 +421,10 @@ function startApp() {
             } else if (msg.includes("wrong chain") || msg.includes("chain mismatch") || msg.includes("did not switch")) {
                 log("Wrong network. Manually switch MetaMask to GenLayer Bradbury Testnet (Chain ID 4221).", "error");
                 showTxStatus("", "ERROR");
-            } else if (msg.includes("timed out") || msg.includes("retries")) {
-                log("Consensus taking longer than expected — your tx may still finalize.", "warn");
             } else {
                 log(`Error: ${msg}`, "error");
                 showTxStatus("", "ERROR");
             }
-        } finally {
             setSubmitReady(true);
         }
     }

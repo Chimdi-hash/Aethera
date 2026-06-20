@@ -22,9 +22,11 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: "Method Not Allowed" });
     }
 
-    // Vercel Node.js runtime auto-parses JSON bodies → req.body is already an object.
-    // If it's a string, parse it manually.
+    // Parse body robustly from pre-parsed object, Buffer, string, or stream.
     let body = req.body;
+    if (Buffer.isBuffer(body)) {
+        body = body.toString("utf8");
+    }
     if (typeof body === "string") {
         try {
             body = JSON.parse(body);
@@ -34,9 +36,36 @@ export default async function handler(req, res) {
                 error: { code: -32700, message: "Parse error" },
             });
         }
+    } else if (body && typeof body === "object" && typeof body.on === "function") {
+        try {
+            const chunks = [];
+            for await (const chunk of body) {
+                chunks.push(chunk);
+            }
+            const raw = Buffer.concat(chunks).toString("utf8");
+            body = JSON.parse(raw);
+        } catch {
+            return res.status(400).json({
+                jsonrpc: "2.0", id: 1,
+                error: { code: -32700, message: "Parse error" },
+            });
+        }
+    } else if (!body) {
+        try {
+            const chunks = [];
+            for await (const chunk of req) {
+                chunks.push(chunk);
+            }
+            const raw = Buffer.concat(chunks).toString("utf8");
+            if (raw) {
+                body = JSON.parse(raw);
+            }
+        } catch {
+            // Ignore parse errors here, empty body check is next
+        }
     }
 
-    if (!body) {
+    if (!body || (typeof body === "object" && Object.keys(body).length === 0)) {
         return res.status(400).json({
             jsonrpc: "2.0", id: 1,
             error: { code: -32700, message: "Empty body" },

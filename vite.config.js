@@ -24,9 +24,9 @@ const GENLAYER_RPC = "https://rpc-bradbury.genlayer.com";
 const patchGenlayerRpcId = {
     name: "patch-genlayer-rpc-id",
     transform(code, id) {
-        if (id.includes("genlayer-js") && code.includes("id: Date.now()")) {
+        if (id.includes("genlayer-js") && code.includes("Date.now")) {
             // Replace the problematic large timestamp id with integer 1
-            const patched = code.replace(/id:\s*Date\.now\(\)/g, "id: 1");
+            const patched = code.replace(/id\s*:\s*Date\.now\(\)/g, "id: 1");
             return { code: patched, map: null };
         }
     },
@@ -145,6 +145,9 @@ export default defineConfig({
     root: "frontend",
     server: {
         port: 8000,
+    },
+    optimizeDeps: {
+        exclude: ["genlayer-js"]
     },
     build: {
         outDir: "../dist",

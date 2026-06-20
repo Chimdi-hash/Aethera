@@ -108,6 +108,26 @@
             });
         }
 
+        var getBodyText = async function (body) {
+            if (!body) return null;
+            if (typeof body === 'string') return body;
+            if (body instanceof Uint8Array || body instanceof ArrayBuffer) {
+                try {
+                    return new TextDecoder().decode(body);
+                } catch (e) {
+                    return null;
+                }
+            }
+            if (body && typeof body.text === 'function') {
+                try {
+                    return await body.text();
+                } catch (e) {
+                    return null;
+                }
+            }
+            return null;
+        };
+
         window.fetch = async function rpcIdPatch(input, init) {
             var url, method, bodyText;
 
@@ -122,7 +142,7 @@
             } else {
                 url = String(input || '');
                 method = (init && init.method) || 'GET';
-                bodyText = (init && typeof init.body === 'string') ? init.body : null;
+                bodyText = init ? await getBodyText(init.body) : null;
             }
 
             if (method === 'POST' && bodyText) {
@@ -153,7 +173,14 @@
                     }
 
                     if (changed) {
-                        var newBody = JSON.stringify(body);
+                        var newBodyText = JSON.stringify(body);
+                        var newBody = newBodyText;
+                        if (init && init.body instanceof Uint8Array) {
+                            newBody = new TextEncoder().encode(newBodyText);
+                        } else if (init && init.body instanceof ArrayBuffer) {
+                            newBody = new TextEncoder().encode(newBodyText).buffer;
+                        }
+
                         var newRequest, newInit;
 
                         if (input && typeof input === 'object' && typeof input.clone === 'function') {
@@ -247,7 +274,7 @@
         @keyframes status-pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
         .status-live { animation: status-pulse 2s ease-in-out infinite; }
     </style>
-  <script type="module" crossorigin src="/assets/index-CrKFm2-z.js"></script>
+  <script type="module" crossorigin src="/assets/index-BR1AxaGu.js"></script>
 </head>
 <body class="bg-[#0b0c10] text-[#c5a059] min-h-screen flex flex-col selection:bg-[#45a29e] selection:text-black">
 
