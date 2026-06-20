@@ -41,33 +41,6 @@ function startApp() {
     const txHashEl      = document.getElementById("tx-hash");
     const txStatusEl    = document.getElementById("tx-status");
 
-    // ── Sanitized Provider Proxy ──────────────────────────
-    // Wraps window.ethereum to sanitize eth_sendTransaction params.
-    // This acts as a robust secondary guard directly in app.js.
-    const sanitizedProvider = new Proxy({}, {
-        get(target, prop) {
-            if (!window.ethereum) return undefined;
-            if (prop === "request") {
-                return async (args) => {
-                    const patchedArgs = { ...args };
-                    if (patchedArgs.method === "eth_sendTransaction" && Array.isArray(patchedArgs.params) && patchedArgs.params[0]) {
-                        const tx = patchedArgs.params[0];
-                        const cleanedTx = {};
-                        if ("from" in tx) cleanedTx.from = tx.from;
-                        if ("to" in tx) cleanedTx.to = tx.to;
-                        if ("data" in tx) cleanedTx.data = tx.data;
-                        if ("value" in tx) cleanedTx.value = tx.value;
-                        if ("gas" in tx) cleanedTx.gas = tx.gas;
-                        patchedArgs.params = [cleanedTx, ...patchedArgs.params.slice(1)];
-                    }
-                    return window.ethereum.request(patchedArgs);
-                };
-            }
-            const val = window.ethereum[prop];
-            return typeof val === "function" ? val.bind(window.ethereum) : val;
-        }
-    });
-
     // ── Helpers ──────────────────────────────────────────
 
     function log(message, type = "info") {
@@ -225,7 +198,6 @@ function startApp() {
                 chain:    testnetBradbury,
                 account:  userAddress,
                 endpoint: PROXY_RPC_URL,
-                provider: sanitizedProvider,
             });
 
             if (btnConnect) {
@@ -246,7 +218,6 @@ function startApp() {
                     chain:    testnetBradbury,
                     account:  userAddress,
                     endpoint: PROXY_RPC_URL,
-                    provider: sanitizedProvider,
                 });
                 if (btnConnect) btnConnect.textContent =
                     `${userAddress.slice(0, 6)}…${userAddress.slice(-4)}`;
