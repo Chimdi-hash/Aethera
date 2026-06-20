@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite frontend --port 8000"
+    "dev": "vite frontend --port 8000",
+    "build": "vite build frontend --outDir ../dist",
+    "preview": "vite preview --outDir dist --port 8000"
   },
   "dependencies": {
     "genlayer-js": "^1.1.8"
