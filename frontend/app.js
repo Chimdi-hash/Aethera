@@ -127,43 +127,50 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // ── 2. Network switch helper ──────────────────────────
-    // We point MetaMask at PROXY_RPC_URL (our /api/rpc Vercel function).
-    // The proxy rewrites the JSON-RPC `id` to an integer before forwarding to
-    // the real GenLayer node. This means ALL MetaMask RPC traffic — including
-    // eth_sendTransaction relay — goes through the id-fixing proxy.
+    // We point MetaMask at PROXY_RPC_URL (/api/rpc).
+    // The proxy coerces JSON-RPC `id` to integer before forwarding to GenLayer.
+    // We always call wallet_addEthereumChain (not just when chain is missing)
+    // so MetaMask updates the RPC URL to our proxy even for existing configs.
     async function ensureGenLayerNetwork() {
         const currentChainHex = await window.ethereum.request({ method: "eth_chainId" });
-        if (currentChainHex.toLowerCase() === CHAIN_ID_HEX.toLowerCase()) return;
 
-        log("Switching MetaMask to GenLayer Bradbury Testnet…");
         try {
+            // wallet_addEthereumChain: adds the chain if new, or prompts the
+            // user to approve an RPC URL update if the chain already exists
+            // with a different URL. Silent if config matches exactly.
             await window.ethereum.request({
-                method: "wallet_switchEthereumChain",
-                params: [{ chainId: CHAIN_ID_HEX }],
+                method: "wallet_addEthereumChain",
+                params: [{
+                    chainId:  CHAIN_ID_HEX,
+                    chainName: "GenLayer Bradbury Testnet",
+                    nativeCurrency: { name: "GEN", symbol: "GEN", decimals: 18 },
+                    rpcUrls: [PROXY_RPC_URL],
+                    blockExplorerUrls: ["https://studio.genlayer.com/"],
+                }],
             });
-        } catch (switchErr) {
-            // Chain not in MetaMask yet — add it pointing to OUR proxy URL
-            if (switchErr.code === 4902 || switchErr.message?.includes("Unrecognized chain")) {
-                await window.ethereum.request({
-                    method: "wallet_addEthereumChain",
-                    params: [{
-                        chainId:  CHAIN_ID_HEX,
-                        chainName: "GenLayer Bradbury Testnet",
-                        nativeCurrency: { name: "GEN", symbol: "GEN", decimals: 18 },
-                        rpcUrls: [PROXY_RPC_URL],          // ← OUR proxy, not the raw RPC
-                        blockExplorerUrls: ["https://studio.genlayer.com/"],
-                    }],
-                });
-            } else {
-                throw switchErr;
+        } catch (addErr) {
+            // Some wallets throw if the chain is already the active chain — that's fine
+            if (addErr.code !== 4001) {
+                // Not a user rejection — try a plain switch as fallback
+                try {
+                    await window.ethereum.request({
+                        method: "wallet_switchEthereumChain",
+                        params: [{ chainId: CHAIN_ID_HEX }],
+                    });
+                } catch {
+                    // If we're already on the right chain, ignore
+                }
             }
         }
 
         const confirmed = await window.ethereum.request({ method: "eth_chainId" });
         if (confirmed.toLowerCase() !== CHAIN_ID_HEX.toLowerCase()) {
-            throw new Error("MetaMask did not switch to GenLayer Bradbury Testnet. Please switch manually.");
+            throw new Error(
+                "Please switch MetaMask to GenLayer Bradbury Testnet (Chain ID 4221) manually."
+            );
         }
     }
+
 
     // ── 3. Connect wallet ─────────────────────────────────
     async function connectWallet() {
