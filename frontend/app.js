@@ -35,6 +35,9 @@ function startApp() {
     const inputUrl      = document.getElementById("input-url");
     const btnSubmit     = document.getElementById("btn-submit");
     const btnConnect    = document.getElementById("btn-connect");
+    const walletDropdown= document.getElementById("wallet-dropdown");
+    const btnDisconnect = document.getElementById("btn-disconnect");
+    let isDropdownOpen  = false;
     const logBox        = document.getElementById("log-box");
     const logStream     = document.getElementById("log-stream");
     const txStatusBox   = document.getElementById("tx-status-box");
@@ -208,6 +211,49 @@ function startApp() {
     }
 
 
+    // ── Wallet Dropdown Logic ─────────────────────────────
+    function toggleDropdown() {
+        isDropdownOpen = !isDropdownOpen;
+        if (walletDropdown) {
+            if (isDropdownOpen) {
+                walletDropdown.classList.remove("opacity-0", "invisible", "scale-95");
+                walletDropdown.classList.add("opacity-100", "visible", "scale-100");
+            } else {
+                walletDropdown.classList.add("opacity-0", "invisible", "scale-95");
+                walletDropdown.classList.remove("opacity-100", "visible", "scale-100");
+            }
+        }
+    }
+
+    function disconnectWallet() {
+        userAddress = null;
+        genLayerClient = null;
+        setSubmitReady(false);
+        setStatus("DISCONNECTED", false);
+        
+        if (isDropdownOpen) toggleDropdown();
+        
+        if (btnConnect) {
+            btnConnect.innerHTML = "CONNECT WALLET";
+            btnConnect.disabled = false;
+            btnConnect.className = "px-5 py-2 text-xs tracking-wider flex items-center text-[#00f2fe] border border-[#00f2fe]/40 hover:border-[#00f2fe] hover:bg-[#00f2fe]/10 rounded transition-all duration-300 bg-transparent";
+        }
+        log("Wallet disconnected professionally.", "success");
+    }
+
+    document.addEventListener("click", (e) => {
+        if (isDropdownOpen && walletDropdown && !walletDropdown.contains(e.target) && e.target !== btnConnect && !btnConnect.contains(e.target)) {
+            toggleDropdown();
+        }
+    });
+
+    if (btnDisconnect) {
+        btnDisconnect.addEventListener("click", (e) => {
+            e.stopPropagation();
+            disconnectWallet();
+        });
+    }
+
     // ── 3. Connect wallet ─────────────────────────────────
     async function connectWallet() {
         if (typeof window.ethereum === "undefined") {
@@ -239,11 +285,11 @@ function startApp() {
             });
 
             if (btnConnect) {
-                btnConnect.textContent =
-                    `${userAddress.slice(0, 6)}…${userAddress.slice(-4)}`;
+                btnConnect.innerHTML =
+                    `${userAddress.slice(0, 6)}…${userAddress.slice(-4)} <svg class="w-3 h-3 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>`;
                 btnConnect.disabled = false;
                 btnConnect.className =
-                    "px-5 py-2 text-xs tracking-wider text-emerald-400 border border-emerald-400/40 hover:border-emerald-400 hover:bg-emerald-400/10 rounded transition-all duration-300 bg-transparent";
+                    "px-5 py-2 text-xs tracking-wider flex items-center text-emerald-400 border border-emerald-400/40 hover:border-emerald-400 hover:bg-emerald-400/10 rounded transition-all duration-300 bg-transparent";
             }
 
             setSubmitReady(true);
@@ -264,8 +310,8 @@ function startApp() {
                     account:  userAddress,
                     endpoint: PROXY_RPC_URL,
                 });
-                if (btnConnect) btnConnect.textContent =
-                    `${userAddress.slice(0, 6)}…${userAddress.slice(-4)}`;
+                if (btnConnect) btnConnect.innerHTML =
+                    `${userAddress.slice(0, 6)}…${userAddress.slice(-4)} <svg class="w-3 h-3 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>`;
                 log("Account changed: " + userAddress, "warn");
             });
 
@@ -276,10 +322,10 @@ function startApp() {
                 userAddress = null;
                 genLayerClient = null;
                 if (btnConnect) {
-                    btnConnect.textContent = "CONNECT WALLET";
+                    btnConnect.innerHTML = "CONNECT WALLET";
                     btnConnect.disabled = false;
                     btnConnect.className =
-                        "px-5 py-2 text-xs tracking-wider text-[#00f2fe] border border-[#00f2fe]/40 hover:border-[#00f2fe] hover:bg-[#00f2fe]/10 rounded transition-all duration-300 bg-transparent";
+                        "px-5 py-2 text-xs tracking-wider flex items-center text-[#00f2fe] border border-[#00f2fe]/40 hover:border-[#00f2fe] hover:bg-[#00f2fe]/10 rounded transition-all duration-300 bg-transparent";
                 }
             });
 
@@ -291,7 +337,7 @@ function startApp() {
                 log(`Wallet error: ${msg}`, "error");
             }
             if (btnConnect) {
-                btnConnect.textContent = "CONNECT WALLET";
+                btnConnect.innerHTML = "CONNECT WALLET";
                 btnConnect.disabled = false;
             }
         }
@@ -434,7 +480,16 @@ function startApp() {
     }
 
     // ── 5. Wire up events ─────────────────────────────────
-    if (btnConnect) btnConnect.addEventListener("click", connectWallet);
+    if (btnConnect) {
+        btnConnect.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            if (userAddress) {
+                toggleDropdown();
+            } else {
+                await connectWallet();
+            }
+        });
+    }
     if (submissionForm) submissionForm.addEventListener("submit", handleSubmission);
     if (btnSubmit)  btnSubmit.addEventListener("click", handleSubmission);
 
