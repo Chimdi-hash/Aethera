@@ -22,10 +22,13 @@ class BountyHub(gl.Contract):
     def submit_and_evaluate(self, url: str) -> None:
         # Step 1: Define the isolated non-deterministic function inside the method
         def my_non_deterministic_block():
+            # Check if it's a github commit link
+            if "github.com" not in url.lower() or "/commit/" not in url.lower():
+                return False
             # Grabs the web page content safely
             web_data = gl.nondet.web.render(url, mode="text")
-            # Returns True if it finds 'web3', False if not
-            return "web3" in web_data.lower()
+            # Returns True if it finds 'commit', False if not
+            return "commit" in web_data.lower()
 
         # Step 2: Run the consensus wrapper just like the guide example
         is_valid = gl.eq_principle.strict_eq(my_non_deterministic_block)
