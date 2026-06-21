@@ -147,11 +147,30 @@ export default defineConfig({
         port: 8000,
     },
     optimizeDeps: {
-        exclude: ["genlayer-js"]
+        exclude: ["genlayer-js", "viem", "@noble/curves", "@noble/hashes"]
     },
     build: {
         outDir: "../dist",
         emptyOutDir: true,
     },
-    plugins: [patchGenlayerRpcId, genLayerRpcProxy],
+    plugins: [patchGenlayerRpcId, genLayerRpcProxy, {
+        name: "patch-viem-and-genlayer",
+        transform(code, id) {
+            if (id.includes("genlayer-js") && code.includes("createPublicClient(")) {
+                return {
+                    code: code.replace(
+                        /createPublicClient\(chainConfig,\s*customTransport\)/g,
+                        "createPublicClient({ chain: chainConfig, transport: customTransport })"
+                    ),
+                    map: null
+                };
+            }
+            if (id.includes("viem") && code.includes("globalThis.fetch")) {
+                return {
+                    code: code.replace(/globalThis\.fetch/g, "(...args) => window.fetch(...args)"),
+                    map: null
+                };
+            }
+        }
+    }],
 });

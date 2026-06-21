@@ -421,6 +421,10 @@ function startApp() {
             } else if (msg.includes("wrong chain") || msg.includes("chain mismatch") || msg.includes("did not switch")) {
                 log("Wrong network. Manually switch MetaMask to GenLayer Bradbury Testnet (Chain ID 4221).", "error");
                 showTxStatus("", "ERROR");
+            } else if (msg.includes("Parse error as single request") || msg.includes("cannot unmarshal string")) {
+                log("RPC String ID Error detected! Your MetaMask is bypassing the Aethera proxy.", "error");
+                log("FIX: Please delete 'GenLayer Bradbury Testnet' from MetaMask and reconnect to let the App configure the proxy RPC.", "warn");
+                showTxStatus("", "ERROR");
             } else {
                 log(`Error: ${msg}`, "error");
                 showTxStatus("", "ERROR");
