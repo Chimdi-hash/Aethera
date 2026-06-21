@@ -137,7 +137,7 @@ function startApp() {
             setStatus("NODE ACTIVE", true);
             if (liveTitle)    liveTitle.textContent    = "Consensus Diagnostics Active";
             if (liveCriteria) liveCriteria.textContent =
-                "Active Rules: Verify content authenticity via GitHub commits link.";
+                "Active Rules: Verify content authenticity via GitHub repository link.";
             log("Aethera network infrastructure connected — GenLayer Bradbury Testnet.", "success");
 
             // Auto-connect if already authorized in MetaMask
