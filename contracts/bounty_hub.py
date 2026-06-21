@@ -22,10 +22,25 @@ class BountyHub(gl.Contract):
     def submit_and_evaluate(self, url: str) -> None:
         # Step 1: Define the isolated non-deterministic function inside the method
         def my_non_deterministic_block():
+            # First, check deterministically if it looks like a GitHub URL
+            if "github.com" not in url.lower():
+                raise ValueError("Validators rejected this entry: The URL does not point to github.com.")
+            
             # Grabs the web page content safely
             web_data = gl.nondet.web.render(url, mode="text")
-            # Returns True if it finds 'web3', False if not
-            return "web3" in web_data.lower()
+            
+            # Ask the AI Validator to confirm it's a valid GitHub repository
+            task = (
+                f"Analyze the following web page content and confirm if it is a valid GitHub repository. "
+                f"Reply strictly with 'yes' or 'no'.\n\nContent snippet:\n{web_data[:2000]}"
+            )
+            response = gl.nondet.llm.call(task)
+            
+            # If the AI says it's not a GitHub repo, raise an error to cancel the transaction
+            if "yes" not in response.lower():
+                raise ValueError("Validators rejected this entry: Not recognized as a valid GitHub repository.")
+                
+            return True
 
         # Step 2: Run the consensus wrapper just like the guide example
         is_valid = gl.eq_principle.strict_eq(my_non_deterministic_block)
