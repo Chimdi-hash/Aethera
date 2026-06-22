@@ -1,40 +1,24 @@
-# v0.2.16
 # { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
 
 from genlayer import *
 
-
-# contract class
-class BountyHub(gl.Contract):
+class AetheraConsensusDiagnostics(gl.Contract):
+    repository_url: str
     status: str
 
-    # constructor
-    def __init__(self, initial_status: str):
-        self.status = initial_status
+    def __init__(self, initial_url: str):
+        self.repository_url = initial_url
+        self.status = "READY"
 
-    # read methods must be annotated with view
+    @gl.public.write
+    def submit_and_evaluate(self, url: str) -> None:
+        self.repository_url = url
+        self.status = "SUBMITTED"
+
     @gl.public.view
     def get_status(self) -> str:
         return self.status
 
-    # write method formatted EXACTLY like the official guide
-    @gl.public.write
-    def submit_and_evaluate(self, url: str) -> None:
-        # Step 1: Define the isolated non-deterministic function inside the method
-        def my_non_deterministic_block():
-            # Check if it's a github repo link and NOT a commit link
-            if "github.com" not in url.lower() or "/commit/" in url.lower():
-                return False
-            # Grabs the web page content safely
-            web_data = gl.nondet.web.render(url, mode="text")
-            # Return True if the page successfully loads and contains github-related content
-            return "github" in web_data.lower()
-
-        # Step 2: Run the consensus wrapper just like the guide example
-        is_valid = gl.eq_principle.strict_eq(my_non_deterministic_block)
-
-        # Step 3: Update the deterministic state based on the result
-        if is_valid:
-            self.status = "Approved"
-        else:
-            self.status = "Rejected"
+    @gl.public.view
+    def get_repository(self) -> str:
+        return self.repository_url
