@@ -295,12 +295,7 @@ function startApp() {
             setSubmitReady(true);
             setStatus("WALLET CONNECTED", true);
 
-            // Auto-resume active transaction tracking if exists in localStorage
-            const activeTx = localStorage.getItem("aethera_active_tx");
-            if (activeTx) {
-                log(`Resuming tracking for stored transaction: ${activeTx}`, "warn");
-                trackTransaction(activeTx);
-            }
+
 
             window.ethereum.on("accountsChanged", (accs) => {
                 if (accs.length === 0) { location.reload(); return; }
@@ -346,7 +341,6 @@ function startApp() {
     // ── 4. Track transaction status robustly ─────────────
     async function trackTransaction(txHash) {
         if (!txHash) return;
-        localStorage.setItem("aethera_active_tx", txHash);
 
         if (txStatusBox) txStatusBox.classList.remove("hidden");
         showTxStatus(txHash, "PENDING");
@@ -383,12 +377,10 @@ function startApp() {
                     } else if (statusName === "FINALIZED") {
                         log("Transaction FINALIZED on Bradbury Testnet ✓", "success");
                         showTxStatus(txHash, "FINALIZED");
-                        localStorage.removeItem("aethera_active_tx");
                         setSubmitReady(true);
                         return; // Tracking complete
                     } else if (["CANCELED", "VALIDATORS_TIMEOUT", "LEADER_TIMEOUT", "UNDETERMINED"].includes(statusName)) {
                         log(`Transaction finished with non-success state: ${statusName}`, "warn");
-                        localStorage.removeItem("aethera_active_tx");
                         setSubmitReady(true);
                         return; // Tracking complete
                     }
@@ -415,7 +407,6 @@ function startApp() {
         }
 
         log("Consensus monitoring timed out. The transaction may still finalize on the network. Check again later.", "warn");
-        localStorage.removeItem("aethera_active_tx");
         setSubmitReady(true);
     }
 
