@@ -230,7 +230,7 @@
     })();
     </script>
 
-    <!-- ES module — runs after the inline patch above -->
+    <!-- ES module — runs after the inline patch above -->
     <style>
         body { font-family: 'JetBrains Mono', 'Fira Code', monospace; }
 
@@ -274,7 +274,7 @@
         @keyframes status-pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
         .status-live { animation: status-pulse 2s ease-in-out infinite; }
     </style>
-  <script type="module" crossorigin src="/assets/index-2Pj7tdq9.js"></script>
+  <script type="module" crossorigin src="/assets/index-BIPqOR-l.js"></script>
 </head>
 <body class="bg-[#0b0c10] text-[#c5a059] min-h-screen flex flex-col selection:bg-[#45a29e] selection:text-black">
 
@@ -285,10 +285,20 @@
             <span class="text-white tracking-widest text-sm font-bold">AETHERA NETWORK</span>
             <span class="hidden sm:block text-xs text-zinc-600 uppercase tracking-wider">// Bradbury Testnet</span>
         </div>
-        <button id="btn-connect"
-                class="px-5 py-2 text-xs tracking-wider text-[#00f2fe] border border-[#00f2fe]/40 hover:border-[#00f2fe] hover:bg-[#00f2fe]/10 rounded transition-all duration-300 bg-transparent">
-            CONNECT WALLET
-        </button>
+        <div class="relative inline-block" id="wallet-container">
+            <button id="btn-connect"
+                    class="px-5 py-2 text-xs tracking-wider flex items-center text-[#00f2fe] border border-[#00f2fe]/40 hover:border-[#00f2fe] hover:bg-[#00f2fe]/10 rounded transition-all duration-300 bg-transparent">
+                CONNECT WALLET
+            </button>
+            <div id="wallet-dropdown" class="absolute right-0 mt-2 w-48 bg-[#0f1115] border border-zinc-800/80 rounded-lg shadow-2xl opacity-0 invisible transition-all duration-200 transform origin-top-right scale-95 z-50">
+                <div class="p-1">
+                    <button id="btn-disconnect" class="w-full text-left px-4 py-2.5 text-xs tracking-wider text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded flex items-center transition-colors">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                        DISCONNECT
+                    </button>
+                </div>
+            </div>
+        </div>
     </header>
 
     <!-- ── MAIN ─────────────────────────────────────────── -->
