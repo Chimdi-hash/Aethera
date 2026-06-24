@@ -349,8 +349,8 @@ function startApp() {
 
         log(`Started tracking transaction: ${txHash}`);
 
-        let retries = 180; // 180 retries * 5s = 15 minutes of tracking
-        let interval = 5000;
+        let retries = 450; // 450 retries * 2s = 15 minutes of tracking
+        let interval = 2000;
         let lastLoggedStatus = "";
 
         while (retries > 0) {
