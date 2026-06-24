@@ -8,7 +8,7 @@ import { testnetBradbury } from "genlayer-js/chains";
 import { TransactionStatus } from "genlayer-js/types";
 
 // ── Config ──────────────────────────────────────────────────
-const CONTRACT_ADDRESS  = "0xD2D4B2954c95620C6e48bA70739AB236A4f08370";
+const CONTRACT_ADDRESS  = "0x9AAD9CDaB0FFe3A5A0bdDcE07F7023afc86827Df";
 const CHAIN_ID_HEX      = "0x107d";   // 4221
 const CHAIN_ID_DEC      = 4221;
 const GENLAYER_RPC_URL  = "https://rpc-bradbury.genlayer.com";
@@ -362,8 +362,8 @@ function startApp() {
 
             try {
                 const tx = await genLayerClient.getTransaction({ hash: txHash });
-                if (tx && tx.statusName) {
-                    const statusName = tx.statusName;
+                if (tx && tx.status) {
+                    const statusName = tx.status;
                     showTxStatus(txHash, statusName);
 
                     if (statusName !== lastLoggedStatus) {
