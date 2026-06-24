@@ -362,8 +362,15 @@ function startApp() {
 
             try {
                 const tx = await genLayerClient.getTransaction({ hash: txHash });
-                if (tx && tx.status) {
-                    const statusName = tx.status;
+                if (tx && tx.status !== undefined) {
+                    const statusMap = [
+                        "UNINITIALIZED", "PENDING", "PROPOSING", "COMMITTING", 
+                        "REVEALING", "ACCEPTED", "UNDETERMINED", "FINALIZED", 
+                        "CANCELED", "APPEAL_REVEALING", "APPEAL_COMMITTING", 
+                        "READY_TO_FINALIZE", "VALIDATORS_TIMEOUT", "LEADER_TIMEOUT"
+                    ];
+                    const statusName = typeof tx.status === 'number' ? (statusMap[tx.status] || "UNKNOWN") : (tx.statusName || tx.status);
+                    
                     showTxStatus(txHash, statusName);
 
                     if (statusName !== lastLoggedStatus) {
