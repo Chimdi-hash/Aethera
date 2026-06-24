@@ -376,12 +376,14 @@ function startApp() {
                     if (statusName !== lastLoggedStatus) {
                         log(`Consensus state changed: ${statusName}`, "info");
                         lastLoggedStatus = statusName;
+                        
+                        if (statusName === "ACCEPTED") {
+                            log("Consensus ACCEPTED ✓ — AI evaluation complete.", "success");
+                            if (liveUrl) liveUrl.textContent = `Last Validated: ${txHash.slice(0, 10)}...${txHash.slice(-8)}`;
+                        }
                     }
 
-                    if (statusName === "ACCEPTED") {
-                        log("Consensus ACCEPTED ✓ — AI evaluation complete.", "success");
-                        if (liveUrl) liveUrl.textContent = `Last Validated: ${txHash.slice(0, 10)}...${txHash.slice(-8)}`;
-                    } else if (statusName === "FINALIZED") {
+                    if (statusName === "FINALIZED") {
                         log("Transaction FINALIZED on Bradbury Testnet ✓", "success");
                         showTxStatus(txHash, "FINALIZED");
                         setSubmitReady(true);
