@@ -1,7 +1,7 @@
 import { createClient } from "genlayer-js";
 import { testnetBradbury } from "genlayer-js/chains";
 
-const CONTRACT_ADDRESS  = "0xA74b8A3D82BFDd52B41AFD2D16a961394804F958";
+const CONTRACT_ADDRESS  = "0xd7Cd4506337dEa7e5C8B6f5d05ddE3c3292C8b25";
 const PROXY_RPC_URL     = "https://rpc-bradbury.genlayer.com";
 
 const client = createClient({
