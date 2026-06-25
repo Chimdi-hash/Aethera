@@ -380,10 +380,18 @@ function startApp() {
                         if (statusName === "ACCEPTED") {
                             log("Consensus ACCEPTED ✓ — AI evaluation complete.", "success");
                             if (liveUrl) liveUrl.textContent = `Last Validated: ${txHash.slice(0, 10)}...${txHash.slice(-8)}`;
-                            
+                        }
+                    }
+
+                    if (statusName === "FINALIZED") {
+                        log("Transaction FINALIZED on Bradbury Testnet ✓", "success");
+                        showTxStatus(txHash, "FINALIZED");
+                        
+                        log("Waiting for RPC state sync...", "info");
+                        setTimeout(async () => {
                             // Fetch validator remarks from the contract
                             try {
-                                log("Fetching validator remarks from contract...", "info");
+                                log("Fetching final validator remarks from contract...", "info");
                                 const contractStatus = await genLayerClient.readContract({
                                     address: CONTRACT_ADDRESS,
                                     functionName: "get_status",
@@ -400,13 +408,9 @@ function startApp() {
                             } catch (e) {
                                 log(`Failed to fetch remarks: ${e.message}`, "warn");
                             }
-                        }
-                    }
-
-                    if (statusName === "FINALIZED") {
-                        log("Transaction FINALIZED on Bradbury Testnet ✓", "success");
-                        showTxStatus(txHash, "FINALIZED");
-                        setSubmitReady(true);
+                            setSubmitReady(true);
+                        }, 3000);
+                        
                         return; // Tracking complete
                     } else if (["CANCELED", "VALIDATORS_TIMEOUT", "LEADER_TIMEOUT", "UNDETERMINED"].includes(statusName)) {
                         log(`Transaction finished with non-success state: ${statusName}`, "warn");
