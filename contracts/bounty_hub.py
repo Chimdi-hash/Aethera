@@ -14,10 +14,18 @@ class AetheraConsensusDiagnostics(gl.Contract):
 
     def _eval_repo(self) -> str:
         try:
-            response = gl.nondet.web.get(self.repository_url)
+            url = self.repository_url
+            # If it's a standard github url, try fetching the README directly to avoid huge HTML payloads and 403s
+            if "github.com" in url and "raw.githubusercontent.com" not in url:
+                parts = url.rstrip("/").split("github.com/")
+                if len(parts) == 2:
+                    repo_path = parts[1]
+                    url = f"https://raw.githubusercontent.com/{repo_path}/main/README.md"
+
+            response = gl.nondet.web.get(url)
             content = response.body.decode('utf-8', errors='ignore')[:1500]
-        except Exception:
-            return "NOT_SECURE|Network error: Failed to fetch the repository URL."
+        except Exception as e:
+            return f"NOT_SECURE|Network error: {type(e).__name__} - {str(e)}"
 
         prompt = f"Analyze the following content from a repository for security vulnerabilities:\n\n{content}\n\nFormat your response EXACTLY like this: STATUS|REMARK\nWhere STATUS is either SECURE or NOT_SECURE, and REMARK is a short 1-sentence remark explaining why. Do not use any other formatting or JSON."
         
@@ -31,9 +39,9 @@ class AetheraConsensusDiagnostics(gl.Contract):
                     status = "NOT_SECURE"
                 return f"{status}|{remark}"
             else:
-                return "NOT_SECURE|Could not confidently determine security status."
-        except Exception:
-            return "NOT_SECURE|Analysis failed due to parsing error."
+                return f"NOT_SECURE|Invalid LLM output format: {llm_response[:100]}"
+        except Exception as e:
+            return f"NOT_SECURE|Analysis failed: {type(e).__name__} - {str(e)}"
 
     @gl.public.write
     def submit_and_evaluate(self, url: str) -> None:
