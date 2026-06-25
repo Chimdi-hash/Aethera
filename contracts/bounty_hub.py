@@ -1,6 +1,5 @@
 # { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
 
-import json
 from genlayer import *
 
 class AetheraConsensusDiagnostics(gl.Contract):
@@ -20,32 +19,40 @@ class AetheraConsensusDiagnostics(gl.Contract):
             # Ignore decode errors and reduce size to prevent LLM timeouts
             content = response.body.decode('utf-8', errors='ignore')[:1500]
         except Exception:
-            return json.dumps({"status": "NOT_SECURE", "remarks": "Network error: Failed to fetch the repository URL."})
+            return "NOT_SECURE|Network error: Failed to fetch the repository URL."
 
-        prompt = f"Analyze the following content from a repository for security vulnerabilities:\n\n{content}\n\nFormat your response strictly as a JSON object with 'status' (either 'SECURE' or 'NOT_SECURE') and 'remarks' (a short 1-sentence remark explaining why)."
+        prompt = f"Analyze the following content from a repository for security vulnerabilities:\n\n{content}\n\nFormat your response EXACTLY like this: STATUS|REMARK\nWhere STATUS is either SECURE or NOT_SECURE, and REMARK is a short 1-sentence remark explaining why. Do not use any other formatting or JSON."
         
         try:
-            llm_response = gl.nondet.exec_prompt(prompt, response_format="json")
-            parsed = json.loads(llm_response)
-            return json.dumps({
-                "status": parsed.get("status", "NOT_SECURE"),
-                "remarks": parsed.get("remarks", "Could not confidently determine security status.")
-            }, sort_keys=True)
+            llm_response = gl.nondet.exec_prompt(prompt)
+            parts = llm_response.split('|', 1)
+            if len(parts) == 2:
+                status = parts[0].strip().upper()
+                remark = parts[1].strip()
+                if status not in ["SECURE", "NOT_SECURE"]:
+                    status = "NOT_SECURE"
+                return f"{status}|{remark}"
+            else:
+                return "NOT_SECURE|Could not confidently determine security status."
         except Exception:
-            return json.dumps({"status": "NOT_SECURE", "remarks": "Analysis failed due to parsing error."})
+            return "NOT_SECURE|Analysis failed due to parsing error."
 
     @gl.public.write
     def submit_and_evaluate(self, url: str) -> None:
         self.repository_url = url
         
-        # Make the equivalence prompt extremely lenient to ensure validators agree with the leader
-        eq_prompt = "You are comparing two security analysis JSONs. Consider them EQUIVALENT and return true as long as both contain a 'status' and 'remarks' field, regardless of the exact wording."
+        # Make the equivalence prompt extremely lenient
+        eq_prompt = "You are comparing two security analysis results formatted as STATUS|REMARK. Consider them EQUIVALENT and return true as long as both follow the STATUS|REMARK format and have some text for the remark, regardless of the exact wording."
         result_str = gl.eq_principle.prompt_comparative(self._eval_repo, eq_prompt)
 
         try:
-            parsed_result = json.loads(result_str)
-            self.status = parsed_result.get("status", "NOT_SECURE")
-            self.remarks = parsed_result.get("remarks", "Analysis error.")
+            parts = result_str.split('|', 1)
+            if len(parts) == 2:
+                self.status = parts[0].strip()
+                self.remarks = parts[1].strip()
+            else:
+                self.status = "NOT_SECURE"
+                self.remarks = "Invalid consensus result format."
         except Exception:
             self.status = "NOT_SECURE"
             self.remarks = "Failed to parse consensus result."
