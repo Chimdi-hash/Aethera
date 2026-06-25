@@ -460,13 +460,40 @@ function startApp() {
         try {
             await ensureGenLayerNetwork();
 
-            log(`Submitting: submit_and_evaluate("${targetUrl}")`);
+            log(`Evaluating repository: ${targetUrl}`);
+            log("Fetching repository content locally to bypass GenVM restrictions...");
+
+            let fetchUrl = targetUrl;
+            if (targetUrl.includes("github.com") && !targetUrl.includes("raw.githubusercontent.com")) {
+                let parts = targetUrl.split("github.com/");
+                if (parts.length === 2) {
+                    let repoPath = parts[1];
+                    if (repoPath.endsWith("/")) repoPath = repoPath.slice(0, -1);
+                    fetchUrl = `https://raw.githubusercontent.com/${repoPath}/main/README.md`;
+                }
+            }
+
+            let repoContent = "";
+            try {
+                const response = await fetch(fetchUrl);
+                if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+                repoContent = await response.text();
+                log("Successfully fetched repository content!", "success");
+            } catch (error) {
+                log(`Failed to fetch repository content: ${error.message}`, "error");
+                repoContent = `Repository URL: ${targetUrl}\nCould not fetch content locally.`;
+            }
+
+            // Trim content to 1500 chars to save gas and LLM context limits
+            repoContent = repoContent.substring(0, 1500);
+
+            log(`Submitting: submit_and_evaluate(...)`);
             log("MetaMask will open — please sign the transaction…", "warn");
 
             const txHash = await genLayerClient.writeContract({
                 address:      CONTRACT_ADDRESS,
                 functionName: "submit_and_evaluate",
-                args:         [targetUrl],
+                args:         [repoContent],
                 value:        BigInt(0),
             });
 

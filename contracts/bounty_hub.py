@@ -13,21 +13,10 @@ class AetheraConsensusDiagnostics(gl.Contract):
         self.remarks = "Awaiting evaluation"
 
     def _eval_repo(self) -> str:
-        try:
-            url = self.repository_url
-            if "github.com" in url and "raw.githubusercontent.com" not in url:
-                parts = url.split("github.com/")
-                if len(parts) == 2:
-                    repo_path = parts[1]
-                    if repo_path.endswith("/"):
-                        repo_path = repo_path[:-1]
-                    url = "https://raw.githubusercontent.com/" + repo_path + "/main/README.md"
-
-            response = gl.nondet.web.get(url)
-            content = response.body.decode('utf-8', errors='ignore')[:1500]
-        except Exception as e:
-            return "NOT_SECURE|Network error: " + str(e)
-
+        # We assume self.repository_url NOW CONTAINS the actual repository content
+        # fetched by the frontend, to bypass GenLayer's web.get restrictions!
+        content = self.repository_url[:1500]
+        
         prompt = "Analyze the following content from a repository for security vulnerabilities:\n\n" + content + "\n\nFormat your response EXACTLY like this: STATUS|REMARK\nWhere STATUS is either SECURE or NOT_SECURE, and REMARK is a short 1-sentence remark explaining why. Do not use any other formatting or JSON."
         
         try:
