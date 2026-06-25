@@ -2,30 +2,6 @@
 
 from genlayer import *
 
-def check_repo_security(url: str) -> str:
-    try:
-        response = gl.nondet.web.get(url)
-        # Ignore decode errors and reduce size to prevent LLM timeouts
-        content = response.body.decode('utf-8', errors='ignore')[:1500]
-    except Exception:
-        return "NOT_SECURE|Network error: Failed to fetch the repository URL."
-
-    prompt = f"Analyze the following content from a repository for security vulnerabilities:\n\n{content}\n\nFormat your response EXACTLY like this: STATUS|REMARK\nWhere STATUS is either SECURE or NOT_SECURE, and REMARK is a short 1-sentence remark explaining why. Do not use any other formatting or JSON."
-    
-    try:
-        llm_response = gl.nondet.exec_prompt(prompt)
-        parts = llm_response.split('|', 1)
-        if len(parts) == 2:
-            status = parts[0].strip().upper()
-            remark = parts[1].strip()
-            if status not in ["SECURE", "NOT_SECURE"]:
-                status = "NOT_SECURE"
-            return f"{status}|{remark}"
-        else:
-            return "NOT_SECURE|Could not confidently determine security status."
-    except Exception:
-        return "NOT_SECURE|Analysis failed due to parsing error."
-
 class AetheraConsensusDiagnostics(gl.Contract):
     repository_url: str
     status: str
@@ -36,6 +12,29 @@ class AetheraConsensusDiagnostics(gl.Contract):
         self.status = "READY"
         self.remarks = "Awaiting evaluation"
 
+    def _eval_repo(self) -> str:
+        try:
+            response = gl.nondet.web.get(self.repository_url)
+            content = response.body.decode('utf-8', errors='ignore')[:1500]
+        except Exception:
+            return "NOT_SECURE|Network error: Failed to fetch the repository URL."
+
+        prompt = f"Analyze the following content from a repository for security vulnerabilities:\n\n{content}\n\nFormat your response EXACTLY like this: STATUS|REMARK\nWhere STATUS is either SECURE or NOT_SECURE, and REMARK is a short 1-sentence remark explaining why. Do not use any other formatting or JSON."
+        
+        try:
+            llm_response = gl.nondet.exec_prompt(prompt)
+            parts = llm_response.split('|', 1)
+            if len(parts) == 2:
+                status = parts[0].strip().upper()
+                remark = parts[1].strip()
+                if status not in ["SECURE", "NOT_SECURE"]:
+                    status = "NOT_SECURE"
+                return f"{status}|{remark}"
+            else:
+                return "NOT_SECURE|Could not confidently determine security status."
+        except Exception:
+            return "NOT_SECURE|Analysis failed due to parsing error."
+
     @gl.public.write
     def submit_and_evaluate(self, url: str) -> None:
         try:
@@ -43,7 +42,8 @@ class AetheraConsensusDiagnostics(gl.Contract):
             
             eq_prompt = "You are comparing two security analysis results formatted as STATUS|REMARK. Consider them EQUIVALENT and return true as long as both follow the STATUS|REMARK format and have some text for the remark, regardless of the exact wording."
             
-            result_str = gl.eq_principle.prompt_comparative(check_repo_security, eq_prompt, url)
+            # Pass ONLY the bound method and the prompt (2 arguments!)
+            result_str = gl.eq_principle.prompt_comparative(self._eval_repo, eq_prompt)
 
             parts = result_str.split('|', 1)
             if len(parts) == 2:
