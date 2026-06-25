@@ -8,7 +8,7 @@ import { testnetBradbury } from "genlayer-js/chains";
 import { TransactionStatus } from "genlayer-js/types";
 
 // ── Config ──────────────────────────────────────────────────
-const CONTRACT_ADDRESS  = "0x085131Bdca351c6Bc739EF0334d64a0cB6174c66";
+const CONTRACT_ADDRESS  = "0xdb532d20469B707aAc2916054e750cC760325Da4";
 const CHAIN_ID_HEX      = "0x107d";   // 4221
 const CHAIN_ID_DEC      = 4221;
 const GENLAYER_RPC_URL  = "https://rpc-bradbury.genlayer.com";

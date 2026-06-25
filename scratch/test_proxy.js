@@ -27,12 +27,12 @@ async function run() {
     await testMethod("eth_gasPrice");
     
     // 3. eth_getTransactionCount
-    await testMethod("eth_getTransactionCount", ["0x085131Bdca351c6Bc739EF0334d64a0cB6174c66", "pending"]);
+    await testMethod("eth_getTransactionCount", ["0xdb532d20469B707aAc2916054e750cC760325Da4", "pending"]);
     
     // 4. eth_estimateGas
     const estimateParams = {
         from: "0x0000000000000000000000000000000000000000",
-        to: "0x085131Bdca351c6Bc739EF0334d64a0cB6174c66",
+        to: "0xdb532d20469B707aAc2916054e750cC760325Da4",
         data: "0x"
     };
     await testMethod("eth_estimateGas", [estimateParams]);
