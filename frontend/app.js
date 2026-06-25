@@ -484,8 +484,11 @@ function startApp() {
                 repoContent = `Repository URL: ${targetUrl}\nCould not fetch content locally.`;
             }
 
-            // Trim content to 1500 chars to save gas and LLM context limits
-            repoContent = repoContent.substring(0, 1500);
+            // Aggressively trim to 500 chars to avoid GenVM Calldata limits and LLM timeouts
+            repoContent = repoContent.substring(0, 500);
+            
+            // Sanitize to alphanumeric and basic punctuation to avoid ABI or LLM encoding crashes
+            repoContent = repoContent.replace(/[^a-zA-Z0-9.,?! \n]/g, " ");
 
             log(`Submitting: submit_and_evaluate(...)`);
             log("MetaMask will open — please sign the transaction…", "warn");
