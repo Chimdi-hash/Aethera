@@ -380,36 +380,38 @@ function startApp() {
                         if (statusName === "ACCEPTED") {
                             log("Consensus ACCEPTED ✓ — AI evaluation complete.", "success");
                             if (liveUrl) liveUrl.textContent = `Last Validated: ${txHash.slice(0, 10)}...${txHash.slice(-8)}`;
+                            
+                            log("Waiting 5 seconds for state sync...", "info");
+                            setTimeout(async () => {
+                                // Fetch validator remarks from the contract
+                                try {
+                                    log("Fetching final validator remarks from contract...", "info");
+                                    const contractStatus = await genLayerClient.readContract({
+                                        address: CONTRACT_ADDRESS,
+                                        functionName: "get_status",
+                                        args: []
+                                    });
+                                    const contractRemarks = await genLayerClient.readContract({
+                                        address: CONTRACT_ADDRESS,
+                                        functionName: "get_remarks",
+                                        args: []
+                                    });
+                                    
+                                    log(`[VERDICT] Status: ${contractStatus}`, contractStatus === "SECURE" ? "success" : "error");
+                                    log(`[REMARKS] ${contractRemarks}`, "info");
+                                } catch (e) {
+                                    log(`Failed to fetch remarks: ${e.message}`, "warn");
+                                }
+                                setSubmitReady(true);
+                            }, 5000);
+                            
+                            return; // Tracking complete
                         }
                     }
 
                     if (statusName === "FINALIZED") {
                         log("Transaction FINALIZED on Bradbury Testnet ✓", "success");
                         showTxStatus(txHash, "FINALIZED");
-                        
-                        log("Waiting for RPC state sync...", "info");
-                        setTimeout(async () => {
-                            // Fetch validator remarks from the contract
-                            try {
-                                log("Fetching final validator remarks from contract...", "info");
-                                const contractStatus = await genLayerClient.readContract({
-                                    address: CONTRACT_ADDRESS,
-                                    functionName: "get_status",
-                                    args: []
-                                });
-                                const contractRemarks = await genLayerClient.readContract({
-                                    address: CONTRACT_ADDRESS,
-                                    functionName: "get_remarks",
-                                    args: []
-                                });
-                                
-                                log(`[VERDICT] Status: ${contractStatus}`, contractStatus === "SECURE" ? "success" : "error");
-                                log(`[REMARKS] ${contractRemarks}`, "info");
-                            } catch (e) {
-                                log(`Failed to fetch remarks: ${e.message}`, "warn");
-                            }
-                            setSubmitReady(true);
-                        }, 3000);
                         
                         return; // Tracking complete
                     } else if (["CANCELED", "VALIDATORS_TIMEOUT", "LEADER_TIMEOUT", "UNDETERMINED"].includes(statusName)) {
