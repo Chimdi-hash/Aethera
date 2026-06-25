@@ -1,14 +1,15 @@
 # { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
 
 from genlayer import *
+import json
 
 class AetheraConsensusDiagnostics(gl.Contract):
     repository_url: str
     status: str
     remarks: str
 
-    def __init__(self, initial_url: str):
-        self.repository_url = initial_url
+    def __init__(self):
+        self.repository_url = ""
         self.status = "READY"
         self.remarks = "Awaiting evaluation"
 
@@ -17,7 +18,6 @@ class AetheraConsensusDiagnostics(gl.Contract):
         self.repository_url = url
         
         def eval_repo() -> str:
-            import json
             try:
                 response = gl.nondet.web.get(url)
                 # Ignore decode errors and reduce size to prevent LLM timeouts
@@ -41,7 +41,6 @@ class AetheraConsensusDiagnostics(gl.Contract):
         eq_prompt = "You are comparing two security analysis JSONs. Consider them EQUIVALENT and return true as long as both contain a 'status' and 'remarks' field, regardless of the exact wording."
         result_str = gl.eq_principle.prompt_comparative(eval_repo, eq_prompt)
 
-        import json
         try:
             parsed_result = json.loads(result_str)
             self.status = parsed_result.get("status", "NOT_SECURE")
