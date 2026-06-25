@@ -12,35 +12,38 @@ class AetheraConsensusDiagnostics(gl.Contract):
         self.status = "READY"
         self.remarks = "Awaiting evaluation"
 
-    def _eval_repo(self) -> str:
-        # We assume self.repository_url NOW CONTAINS the actual repository content
-        # fetched by the frontend, to bypass GenLayer's web.get restrictions!
-        content = self.repository_url[:1500]
-        
-        prompt = "Analyze the following content from a repository for security vulnerabilities:\n\n" + content + "\n\nFormat your response EXACTLY like this: STATUS|REMARK\nWhere STATUS is either SECURE or NOT_SECURE, and REMARK is a short 1-sentence remark explaining why. Do not use any other formatting or JSON."
-        
-        try:
-            llm_response = gl.nondet.exec_prompt(prompt)
-            parts = llm_response.split('|', 1)
-            if len(parts) == 2:
-                status = parts[0].strip().upper()
-                remark = parts[1].strip()
-                if status not in ["SECURE", "NOT_SECURE"]:
-                    status = "NOT_SECURE"
-                return status + "|" + remark
-            else:
-                return "NOT_SECURE|Invalid LLM output format."
-        except Exception as e:
-            return "NOT_SECURE|Analysis failed: " + str(e)
-
     @gl.public.write
     def submit_and_evaluate(self, url: str) -> None:
         try:
+            # Save to deterministic storage
             self.repository_url = url
+            
+            # Capture the input variable for the closure.
+            # We MUST NOT use `self` inside the nondet block due to GenVM storage isolation.
+            content_to_analyze = url[:1500]
+            
+            # Define the nondet block as a closure taking 0 arguments.
+            def _eval_repo_closure() -> str:
+                prompt = "Analyze the following content from a repository for security vulnerabilities:\n\n" + content_to_analyze + "\n\nFormat your response EXACTLY like this: STATUS|REMARK\nWhere STATUS is either SECURE or NOT_SECURE, and REMARK is a short 1-sentence remark explaining why. Do not use any other formatting or JSON."
+                
+                try:
+                    llm_response = gl.nondet.exec_prompt(prompt)
+                    parts = llm_response.split('|', 1)
+                    if len(parts) == 2:
+                        status = parts[0].strip().upper()
+                        remark = parts[1].strip()
+                        if status not in ["SECURE", "NOT_SECURE"]:
+                            status = "NOT_SECURE"
+                        return status + "|" + remark
+                    else:
+                        return "NOT_SECURE|Invalid LLM output format."
+                except Exception as e:
+                    return "NOT_SECURE|Analysis failed: " + str(e)
             
             eq_prompt = "You are comparing two security analysis results formatted as STATUS|REMARK. Consider them EQUIVALENT and return true as long as both follow the STATUS|REMARK format and have some text for the remark, regardless of the exact wording."
             
-            result_str = gl.eq_principle.prompt_comparative(self._eval_repo, eq_prompt)
+            # Pass the closure with exactly 2 arguments
+            result_str = gl.eq_principle.prompt_comparative(_eval_repo_closure, eq_prompt)
 
             parts = result_str.split('|', 1)
             if len(parts) == 2:
