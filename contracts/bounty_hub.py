@@ -38,15 +38,13 @@ class AetheraConsensusDiagnostics(gl.Contract):
 
     @gl.public.write
     def submit_and_evaluate(self, url: str) -> None:
-        self.repository_url = url
-        
-        # Make the equivalence prompt extremely lenient
-        eq_prompt = "You are comparing two security analysis results formatted as STATUS|REMARK. Consider them EQUIVALENT and return true as long as both follow the STATUS|REMARK format and have some text for the remark, regardless of the exact wording."
-        
-        # Pass the top-level function and the url argument explicitly to avoid closures/bound methods!
-        result_str = gl.eq_principle.prompt_comparative(check_repo_security, eq_prompt, url)
-
         try:
+            self.repository_url = url
+            
+            eq_prompt = "You are comparing two security analysis results formatted as STATUS|REMARK. Consider them EQUIVALENT and return true as long as both follow the STATUS|REMARK format and have some text for the remark, regardless of the exact wording."
+            
+            result_str = gl.eq_principle.prompt_comparative(check_repo_security, eq_prompt, url)
+
             parts = result_str.split('|', 1)
             if len(parts) == 2:
                 self.status = parts[0].strip()
@@ -54,9 +52,9 @@ class AetheraConsensusDiagnostics(gl.Contract):
             else:
                 self.status = "NOT_SECURE"
                 self.remarks = "Invalid consensus result format."
-        except Exception:
+        except BaseException as e:
             self.status = "NOT_SECURE"
-            self.remarks = "Failed to parse consensus result."
+            self.remarks = f"GenVM Runtime Error: {type(e).__name__} - {str(e)}"
 
     @gl.public.view
     def get_status(self) -> str:
