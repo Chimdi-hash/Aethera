@@ -4,7 +4,7 @@
 // ============================================================
 
 import { createClient }    from "genlayer-js";
-import { simulator } from "genlayer-js/chains";
+import { studionet } from "genlayer-js/chains";
 import { TransactionStatus } from "genlayer-js/types";
 
 // ── Config ──────────────────────────────────────────────────
@@ -279,7 +279,7 @@ function startApp() {
 
             // Create client pointing to proxy RPC URL
             genLayerClient = createClient({
-                chain:    simulator,
+                chain:    studionet,
                 account:  userAddress,
                 endpoint: PROXY_RPC_URL,
             });
@@ -301,7 +301,7 @@ function startApp() {
                 if (accs.length === 0) { location.reload(); return; }
                 userAddress = accs[0];
                 genLayerClient = createClient({
-                    chain:    simulator,
+                    chain:    studionet,
                     account:  userAddress,
                     endpoint: PROXY_RPC_URL,
                 });
