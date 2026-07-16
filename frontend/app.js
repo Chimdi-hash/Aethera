@@ -1,17 +1,17 @@
 // ============================================================
-//  Aethera Hub — GenLayer Bradbury Testnet
+//  Aethera Hub — GenLayer Studio
 //  app.js — all DOM work happens inside DOMContentLoaded
 // ============================================================
 
 import { createClient }    from "genlayer-js";
-import { testnetBradbury } from "genlayer-js/chains";
+import { simulator } from "genlayer-js/chains";
 import { TransactionStatus } from "genlayer-js/types";
 
 // ── Config ──────────────────────────────────────────────────
 const CONTRACT_ADDRESS  = "0x8053Bb9c11e79eD2aBe758c9398630aB7ccd0bc3";
-const CHAIN_ID_HEX      = "0x107d";   // 4221
-const CHAIN_ID_DEC      = 4221;
-const GENLAYER_RPC_URL  = "https://rpc-bradbury.genlayer.com";
+const CHAIN_ID_HEX      = "0xf22f";   // 61999
+const CHAIN_ID_DEC      = 61999;
+const GENLAYER_RPC_URL  = "https://studio.genlayer.com/api";
 const PROXY_RPC_URL     = window.location.origin + "/api/rpc";
 
 // Note: The window.fetch interceptor has been moved entirely to index.html
@@ -117,7 +117,7 @@ function startApp() {
     // ── 1. Init ──────────────────────────────────────────
     async function initAethera() {
         setStatus("CONNECTING…", false);
-        log("Testing connection to GenLayer Bradbury Testnet…");
+        log("Testing connection to GenLayer Studio…");
 
         try {
             // Use the proxy endpoint so the same path works on Vercel and local dev.
@@ -141,7 +141,7 @@ function startApp() {
             if (liveTitle)    liveTitle.textContent    = "Consensus Diagnostics Active";
             if (liveCriteria) liveCriteria.textContent =
                 "Active Rules: Verify content authenticity via GitHub repository link.";
-            log("Aethera network infrastructure connected — GenLayer Bradbury Testnet.", "success");
+            log("Aethera network infrastructure connected — GenLayer Studio.", "success");
 
             // Auto-connect if already authorized in MetaMask
             if (typeof window.ethereum !== "undefined") {
@@ -181,7 +181,7 @@ function startApp() {
                 method: "wallet_addEthereumChain",
                 params: [{
                     chainId:  CHAIN_ID_HEX,
-                    chainName: "GenLayer Bradbury Testnet",
+                    chainName: "GenLayer Studio",
                     nativeCurrency: { name: "GEN", symbol: "GEN", decimals: 18 },
                     rpcUrls: [PROXY_RPC_URL],
                     blockExplorerUrls: ["https://studio.genlayer.com/"],
@@ -205,7 +205,7 @@ function startApp() {
         const confirmed = await window.ethereum.request({ method: "eth_chainId" });
         if (confirmed.toLowerCase() !== CHAIN_ID_HEX.toLowerCase()) {
             throw new Error(
-                "Please switch MetaMask to GenLayer Bradbury Testnet (Chain ID 4221) manually."
+                "Please switch MetaMask to GenLayer Studio (Chain ID 61999) manually."
             );
         }
     }
@@ -275,11 +275,11 @@ function startApp() {
 
             // Ensure MetaMask is on GenLayer (configured with proxy RPC URL)
             await ensureGenLayerNetwork();
-            log("Switched to GenLayer Bradbury Testnet ✓", "success");
+            log("Switched to GenLayer Studio ✓", "success");
 
             // Create client pointing to proxy RPC URL
             genLayerClient = createClient({
-                chain:    testnetBradbury,
+                chain:    simulator,
                 account:  userAddress,
                 endpoint: PROXY_RPC_URL,
             });
@@ -301,7 +301,7 @@ function startApp() {
                 if (accs.length === 0) { location.reload(); return; }
                 userAddress = accs[0];
                 genLayerClient = createClient({
-                    chain:    testnetBradbury,
+                    chain:    simulator,
                     account:  userAddress,
                     endpoint: PROXY_RPC_URL,
                 });
@@ -420,7 +420,7 @@ function startApp() {
                     }
 
                     if (statusName === "FINALIZED") {
-                        log("Transaction FINALIZED on Bradbury Testnet ✓", "success");
+                        log("Transaction FINALIZED on Studio ✓", "success");
                         showTxStatus(txHash, "FINALIZED");
                         
                         return; // Tracking complete
@@ -501,14 +501,14 @@ function startApp() {
                 log("Transaction rejected by user.", "warn");
                 showTxStatus("", "CANCELED");
             } else if (msg.includes("insufficient funds") || msg.includes("insufficient balance")) {
-                log("Not enough GEN tokens. Fund your Bradbury Testnet wallet.", "error");
+                log("Not enough GEN tokens. Fund your Studio wallet.", "error");
                 showTxStatus("", "ERROR");
             } else if (msg.includes("wrong chain") || msg.includes("chain mismatch") || msg.includes("did not switch")) {
-                log("Wrong network. Manually switch MetaMask to GenLayer Bradbury Testnet (Chain ID 4221).", "error");
+                log("Wrong network. Manually switch MetaMask to GenLayer Studio (Chain ID 61999).", "error");
                 showTxStatus("", "ERROR");
             } else if (msg.includes("Parse error as single request") || msg.includes("cannot unmarshal string")) {
                 log("RPC String ID Error detected! Your MetaMask is bypassing the Aethera proxy.", "error");
-                log("FIX: Please delete 'GenLayer Bradbury Testnet' from MetaMask and reconnect to let the App configure the proxy RPC.", "warn");
+                log("FIX: Please delete 'GenLayer Studio' from MetaMask and reconnect to let the App configure the proxy RPC.", "warn");
                 showTxStatus("", "ERROR");
             } else {
                 log(`Error: ${msg}`, "error");
