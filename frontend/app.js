@@ -405,7 +405,7 @@ function startApp() {
                                     log(`[VERDICT] Status: ${contractStatus}`, contractStatus === "SECURE" ? "success" : "error");
                                     log(`[REMARKS] ${contractRemarks}`, "info");
                                     if (bountyReleased) {
-                                        log(`[ADJUDICATION] The AI consensus evaluated the repository as secure. Bounty funds have been RELEASED to the submitter!`, "success");
+                                        log(`[ADJUDICATION] The AI consensus evaluated the repository as secure.`, "success");
                                     } else {
                                         log(`[ADJUDICATION] Bounty claim REJECTED.`, "warn");
                                     }

@@ -25,20 +25,35 @@ class AetheraConsensusDiagnostics(gl.Contract):
             
             # Define the nondet block as a closure taking 0 arguments.
             def _eval_repo_closure() -> str:
+                import json
+                import base64
+                
                 fetch_url = target_url
+                content_to_analyze = ""
+                
                 if "github.com" in fetch_url and "raw.githubusercontent.com" not in fetch_url:
                     parts = fetch_url.split("github.com/")
                     if len(parts) == 2:
                         repo_path = parts[1]
                         if repo_path.endswith("/"):
                             repo_path = repo_path[:-1]
-                        fetch_url = "https://raw.githubusercontent.com/" + repo_path + "/main/README.md"
+                        api_url = "https://api.github.com/repos/" + repo_path + "/readme"
+                        try:
+                            response = gl.nondet.web.get(api_url)
+                            data = json.loads(response.body.decode('utf-8'))
+                            if 'content' in data:
+                                content_to_analyze = base64.b64decode(data['content']).decode('utf-8', errors='ignore')
+                        except Exception as e:
+                            pass
                 
-                try:
-                    response = gl.nondet.web.get(fetch_url)
-                    content_to_analyze = response.body.decode('utf-8', errors='ignore')[:1500]
-                except Exception as e:
-                    return "NOT_SECURE|Fetch Error: " + str(e)
+                if not content_to_analyze:
+                    try:
+                        response = gl.nondet.web.get(fetch_url)
+                        content_to_analyze = response.body.decode('utf-8', errors='ignore')
+                    except Exception as e:
+                        return "NOT_SECURE|Fetch Error: " + str(e)
+
+                content_to_analyze = content_to_analyze[:1500]
 
                 prompt = "Analyze the following content from a repository for security vulnerabilities:\n\n" + content_to_analyze + "\n\nFormat your response EXACTLY like this: STATUS|REMARK\nWhere STATUS is either SECURE or NOT_SECURE, and REMARK is a short 1-sentence remark explaining why. Do not use any other formatting or JSON."
                 
