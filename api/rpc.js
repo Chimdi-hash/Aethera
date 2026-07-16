@@ -4,7 +4,7 @@
 // This file MUST use ESM syntax (export default) because package.json
 // specifies "type": "module".
 
-const UPSTREAM = "https://rpc-bradbury.genlayer.com";
+const UPSTREAM = "https://studio.genlayer.com/api";
 
 let nextRpcId = 1;
 
