@@ -6,11 +6,13 @@ class AetheraConsensusDiagnostics(gl.Contract):
     repository_url: str
     status: str
     remarks: str
+    bounty_released: bool
 
     def __init__(self, initial_url: str):
         self.repository_url = initial_url
         self.status = "READY"
         self.remarks = "Awaiting evaluation"
+        self.bounty_released = False
 
     @gl.public.write
     def submit_and_evaluate(self, url: str) -> None:
@@ -19,11 +21,25 @@ class AetheraConsensusDiagnostics(gl.Contract):
             self.repository_url = url
             
             # Capture the input variable for the closure.
-            # We MUST NOT use `self` inside the nondet block due to GenVM storage isolation.
-            content_to_analyze = url[:1500]
+            target_url = url
             
             # Define the nondet block as a closure taking 0 arguments.
             def _eval_repo_closure() -> str:
+                fetch_url = target_url
+                if "github.com" in fetch_url and "raw.githubusercontent.com" not in fetch_url:
+                    parts = fetch_url.split("github.com/")
+                    if len(parts) == 2:
+                        repo_path = parts[1]
+                        if repo_path.endswith("/"):
+                            repo_path = repo_path[:-1]
+                        fetch_url = "https://raw.githubusercontent.com/" + repo_path + "/main/README.md"
+                
+                try:
+                    response = gl.nondet.web.get(fetch_url)
+                    content_to_analyze = response.body.decode('utf-8', errors='ignore')[:1500]
+                except Exception as e:
+                    return "NOT_SECURE|Fetch Error: " + str(e)
+
                 prompt = "Analyze the following content from a repository for security vulnerabilities:\n\n" + content_to_analyze + "\n\nFormat your response EXACTLY like this: STATUS|REMARK\nWhere STATUS is either SECURE or NOT_SECURE, and REMARK is a short 1-sentence remark explaining why. Do not use any other formatting or JSON."
                 
                 try:
@@ -49,12 +65,22 @@ class AetheraConsensusDiagnostics(gl.Contract):
             if len(parts) == 2:
                 self.status = parts[0].strip()
                 self.remarks = parts[1].strip()
+                
+                # ==== ADJUDICATION WORKFLOW ====
+                # Connect the consensus verdict to a tangible outcome
+                if self.status == "SECURE":
+                    self.bounty_released = True
+                else:
+                    self.bounty_released = False
             else:
                 self.status = "NOT_SECURE"
                 self.remarks = "Invalid consensus result format."
+                self.bounty_released = False
+
         except BaseException as e:
             self.status = "NOT_SECURE"
             self.remarks = "GenVM Runtime Error: " + str(e)
+            self.bounty_released = False
 
     @gl.public.view
     def get_status(self) -> str:
@@ -67,3 +93,7 @@ class AetheraConsensusDiagnostics(gl.Contract):
     @gl.public.view
     def get_repository(self) -> str:
         return self.repository_url
+
+    @gl.public.view
+    def is_bounty_released(self) -> bool:
+        return self.bounty_released

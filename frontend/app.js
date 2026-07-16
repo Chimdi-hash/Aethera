@@ -396,9 +396,19 @@ function startApp() {
                                         functionName: "get_remarks",
                                         args: []
                                     });
+                                    const bountyReleased = await genLayerClient.readContract({
+                                        address: CONTRACT_ADDRESS,
+                                        functionName: "is_bounty_released",
+                                        args: []
+                                    });
                                     
                                     log(`[VERDICT] Status: ${contractStatus}`, contractStatus === "SECURE" ? "success" : "error");
                                     log(`[REMARKS] ${contractRemarks}`, "info");
+                                    if (bountyReleased) {
+                                        log(`[ADJUDICATION] The AI consensus evaluated the repository as secure. Bounty funds have been RELEASED to the submitter!`, "success");
+                                    } else {
+                                        log(`[ADJUDICATION] Bounty claim REJECTED.`, "warn");
+                                    }
                                 } catch (e) {
                                     log(`Failed to fetch remarks: ${e.message}`, "warn");
                                 }
@@ -467,34 +477,7 @@ function startApp() {
             await ensureGenLayerNetwork();
 
             log(`Evaluating repository: ${targetUrl}`);
-            log("Fetching repository content locally to bypass GenVM restrictions...");
-
-            let fetchUrl = targetUrl;
-            if (targetUrl.includes("github.com") && !targetUrl.includes("raw.githubusercontent.com")) {
-                let parts = targetUrl.split("github.com/");
-                if (parts.length === 2) {
-                    let repoPath = parts[1];
-                    if (repoPath.endsWith("/")) repoPath = repoPath.slice(0, -1);
-                    fetchUrl = `https://raw.githubusercontent.com/${repoPath}/main/README.md`;
-                }
-            }
-
-            let repoContent = "";
-            try {
-                const response = await fetch(fetchUrl);
-                if (!response.ok) throw new Error(`HTTP error ${response.status}`);
-                repoContent = await response.text();
-                log("Successfully fetched repository content!", "success");
-            } catch (error) {
-                log(`Failed to fetch repository content: ${error.message}`, "error");
-                repoContent = `Repository URL: ${targetUrl}\nCould not fetch content locally.`;
-            }
-
-            // Aggressively trim to 500 chars to avoid GenVM Calldata limits and LLM timeouts
-            repoContent = repoContent.substring(0, 500);
-            
-            // Sanitize to alphanumeric and basic punctuation to avoid ABI or LLM encoding crashes
-            repoContent = repoContent.replace(/[^a-zA-Z0-9.,?! \n]/g, " ");
+            log("Sending repository URL to GenVM for on-chain consensus evaluation...");
 
             log(`Submitting: submit_and_evaluate(...)`);
             log("MetaMask will open — please sign the transaction…", "warn");
@@ -502,7 +485,7 @@ function startApp() {
             const txHash = await genLayerClient.writeContract({
                 address:      CONTRACT_ADDRESS,
                 functionName: "submit_and_evaluate",
-                args:         [repoContent],
+                args:         [targetUrl],
                 value:        BigInt(0),
             });
 
