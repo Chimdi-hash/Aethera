@@ -402,12 +402,12 @@ function startApp() {
                                         args: []
                                     });
                                     
-                                    log(`[VERDICT] Status: ${contractStatus}`, contractStatus === "SECURE" ? "success" : "error");
+                                    log(`[VERDICT] Status: ${contractStatus}`, contractStatus === "COMPLIANT" ? "success" : "error");
                                     log(`[REMARKS] ${contractRemarks}`, "info");
                                     if (bountyReleased) {
-                                        log(`[ADJUDICATION] The AI consensus evaluated the repository as secure.`, "success");
+                                        log(`[ADJUDICATION] Consensus Resolution: Repository verified as fully compliant with security protocols. Grant disbursement authorized.`, "success");
                                     } else {
-                                        log(`[ADJUDICATION] REJECTED.`, "warn");
+                                        log(`[ADJUDICATION] Consensus Resolution: Non-compliant logic or vulnerabilities detected. Grant disbursement locked.`, "warn");
                                     }
                                 } catch (e) {
                                     log(`Failed to fetch remarks: ${e.message}`, "warn");

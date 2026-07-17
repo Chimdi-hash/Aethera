@@ -53,11 +53,11 @@ class AetheraConsensusDiagnostics(gl.Contract):
                         response = gl.nondet.web.get(fetch_url)
                         content_to_analyze = response.body.decode('utf-8', errors='ignore')
                     except Exception as e:
-                        return "NOT_SECURE|Fetch Error: " + str(e)
+                        return "NON_COMPLIANT|Fetch Error: " + str(e)
 
                 content_to_analyze = content_to_analyze[:1500]
 
-                prompt = "Analyze the following content from a repository for security vulnerabilities:\n\n" + content_to_analyze + "\n\nFormat your response EXACTLY like this: STATUS|REMARK\nWhere STATUS is either SECURE or NOT_SECURE, and REMARK is a short 1-sentence remark explaining why. Do not use any other formatting or JSON."
+                prompt = "Analyze the following content from a repository for security vulnerabilities:\n\n" + content_to_analyze + "\n\nFormat your response EXACTLY like this: STATUS|REMARK\nWhere STATUS is either COMPLIANT or NON_COMPLIANT, and REMARK is a short 1-sentence remark explaining why. Do not use any other formatting or JSON."
                 
                 try:
                     llm_response = gl.nondet.exec_prompt(prompt)
@@ -65,13 +65,13 @@ class AetheraConsensusDiagnostics(gl.Contract):
                     if len(parts) == 2:
                         status = parts[0].strip().upper()
                         remark = parts[1].strip()
-                        if status not in ["SECURE", "NOT_SECURE"]:
-                            status = "NOT_SECURE"
+                        if status not in ["COMPLIANT", "NON_COMPLIANT"]:
+                            status = "NON_COMPLIANT"
                         return status + "|" + remark
                     else:
-                        return "NOT_SECURE|Invalid LLM output format."
+                        return "NON_COMPLIANT|Invalid LLM output format."
                 except Exception as e:
-                    return "NOT_SECURE|Analysis failed: " + str(e)
+                    return "NON_COMPLIANT|Analysis failed: " + str(e)
             
             eq_prompt = "You are comparing two security analysis results formatted as STATUS|REMARK. Consider them EQUIVALENT and return true as long as both follow the STATUS|REMARK format and have some text for the remark, regardless of the exact wording."
             
@@ -85,17 +85,20 @@ class AetheraConsensusDiagnostics(gl.Contract):
                 
                 # ==== ADJUDICATION WORKFLOW ====
                 # Connect the consensus verdict to a tangible outcome
-                if self.status == "SECURE":
+                if self.status == "COMPLIANT":
                     self.bounty_released = True
+                    # IMPORTANT: To actually disburse GEN tokens natively, you would use:
+                    # gl.message.sender.emit_transfer(value=u256(1000000000000000000), on='finalized')
+                    # Note: The contract must hold a GEN balance, and the method must be @gl.public.write.payable
                 else:
                     self.bounty_released = False
             else:
-                self.status = "NOT_SECURE"
+                self.status = "NON_COMPLIANT"
                 self.remarks = "Invalid consensus result format."
                 self.bounty_released = False
 
         except BaseException as e:
-            self.status = "NOT_SECURE"
+            self.status = "NON_COMPLIANT"
             self.remarks = "GenVM Runtime Error: " + str(e)
             self.bounty_released = False
 
