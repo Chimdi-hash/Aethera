@@ -1,22 +1,22 @@
 # 🌐 Aethera Network
 
-A decentralized web content verification oracle built natively on the GenLayer protocol, leveraging multi-validator LLM consensus to bridge real-world data directly to intelligent smart contracts.
+A decentralized web content verification oracle built natively on the GenLayer protocol. Aethera leverages multi-validator LLM consensus to bridge real-world GitHub repository data directly to intelligent smart contracts for security evaluation and automated bounty adjudication.
 
 ---
 
 ## 🔗 Project Links & Metadata
 
-* **Live Deployment Url:** [https://bountyhubapp.vercel.app](https://bountyhubapp.vercel.app)
-* **Target Ledger Infrastructure:** GenLayer Bradbury Testnet
-* **Active Smart Contract Hex Address:** 0xD2D4B2954c95620C6e48bA70739AB236A4f08370
+* **Live Deployment URL:** [https://bountyhubapp.vercel.app](https://bountyhubapp.vercel.app)
+* **Target Ledger Infrastructure:** GenLayer Studio Network (Chain ID: 61999)
+* **Active Smart Contract Address:** `0x7308A2f910AE39E67a2b8f1E0772eBb36ff68a86`
 
 ---
 
 ## 🚀 Overview
 
-**Aethera Network** acts as an AI-native truth consensus layer. By utilizing GenLayer’s unique Intelligent Framework (`gl.Contract`), the application allows users to input any live web URL alongside a specific factual claim. 
+**Aethera Network** acts as an AI-native truth consensus layer and automated bug bounty adjudicator. By utilizing GenLayer’s unique Intelligent Framework (`gl.Contract`), the application allows users to submit a GitHub repository URL for an automated security audit.
 
-Decentralized protocol validator nodes securely fetch the raw text data, execute non-deterministic linguistic evaluations under strict consensus rules, and commit the verified truth state directly back to the blockchain ledger.
+Decentralized protocol validator nodes securely fetch the raw repository README data using the GitHub API, execute non-deterministic linguistic evaluations to identify vulnerabilities under strict consensus rules, and commit the verified truth state directly back to the blockchain ledger. If the repository is evaluated as secure, bounty funds are automatically adjudicated.
 
 ---
 
@@ -24,24 +24,46 @@ Decentralized protocol validator nodes securely fetch the raw text data, execute
 
 ### 🪪 Browser Wallet Integration
 * Seamlessly authenticates user account states using standard browser extensions (`window.ethereum`) like MetaMask or Rabby.
-* Displays truncated wallet addresses dynamically directly on the dashboard navigation bar.
+* Automatically configures and switches networks to the GenLayer Studio RPC.
 
 ### 🤖 Intelligent Contract Execution
-* Built fully compliant with GenLayer **v0.2.17** specifications.
+* Built fully compliant with GenLayer specifications.
 * Implements the `gl.eq_principle.prompt_comparative` framework to securely evaluate non-deterministic data parsing tasks.
+* Resolves GitHub repository URLs, dynamically querying the GitHub API for base64-encoded `README.md` content directly from inside the consensus execution block.
 
-### 📦 On-Chain Storage Mapping
-* Persists the AI validator evaluations directly to high-efficiency `TreeMap` storage blocks.
-* Allows instant, gas-free read lookups for all previously verified historical data queries.
+### 📦 On-Chain Adjudication
+* Persists the AI validator evaluations directly to the smart contract state.
+* Fully automated adjudication workflow bridging AI consensus to tangible blockchain state changes.
 
 ### 📊 Real-Time Network Telemetry
-* Features an intuitive, developer-focused UI displaying transaction pipeline states (`PROPOSING` → `COMMITTING` → `ACCEPTED`).
-* Includes a live console stream that prints real-time logs directly to the user dashboard.
+* Features an intuitive, developer-focused UI displaying transaction pipeline states (`PROPOSING` → `COMMITTING` → `ACCEPTED` → `FINALIZED`).
+* Includes a live console stream that prints real-time node polling logs and intelligent consensus remarks directly to the user dashboard.
+
+### ⚡ Vercel Serverless Function Proxy
+* Includes an integrated serverless JSON-RPC proxy (`/api/rpc`) that sanitizes and routes requests from the frontend to the upstream GenLayer RPC node, resolving issues with string-based `id` handling in standard web3 provider libraries.
 
 ---
 
 ## 🛠️ Architecture & Tech Stack
 
 ```text
-  [ Front-End UI ] ---> [ genlayerclient.js ] ---> [ bradbury RPC Node API ]
-   (Vercel App)           (Go-Compliant JSON)        (LLM Consensus Block)
+  [ Front-End UI ] ---> [ Vercel API Proxy ] ---> [ GenLayer Studio API ]
+   (Vercel App)           (JSON-RPC Router)        (LLM Consensus Block)
+```
+
+## 💻 Local Development
+
+1. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+2. **Start the local development server:**
+   ```bash
+   npm run dev
+   ```
+
+3. **Deploying the Smart Contract:**
+   * Head over to [GenLayer Studio](https://studio.genlayer.com).
+   * Deploy the Python script located at `contracts/bounty_hub.py`.
+   * Copy the deployed contract address and update the `CONTRACT_ADDRESS` constant in `frontend/app.js`.
