@@ -37,6 +37,8 @@ class AetheraConsensusDiagnostics(gl.Contract):
                         repo_path = parts[1]
                         if repo_path.endswith("/"):
                             repo_path = repo_path[:-1]
+                        if repo_path.endswith(".git"):
+                            repo_path = repo_path[:-4]
                         api_url = "https://api.github.com/repos/" + repo_path + "/readme"
                         try:
                             response = gl.nondet.web.get(api_url)
