@@ -14,7 +14,7 @@ class AetheraConsensusDiagnostics(gl.Contract):
         self.remarks = "Awaiting evaluation"
         self.bounty_released = False
 
-    @gl.public.write
+    @gl.public.write.payable
     def submit_and_evaluate(self, url: str) -> None:
         try:
             # Save to deterministic storage
@@ -87,9 +87,8 @@ class AetheraConsensusDiagnostics(gl.Contract):
                 # Connect the consensus verdict to a tangible outcome
                 if self.status == "COMPLIANT":
                     self.bounty_released = True
-                    # IMPORTANT: To actually disburse GEN tokens natively, you would use:
-                    # gl.message.sender.emit_transfer(value=u256(1000000000000000000), on='finalized')
-                    # Note: The contract must hold a GEN balance, and the method must be @gl.public.write.payable
+                    # Disburse exactly 1 GEN token natively to the submitter:
+                    gl.message.sender.emit_transfer(value=u256(1000000000000000000), on='finalized')
                 else:
                     self.bounty_released = False
             else:
