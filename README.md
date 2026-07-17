@@ -8,7 +8,7 @@ A decentralized web content verification oracle built natively on the GenLayer p
 
 * **Live Deployment URL:** [https://bountyhubapp.vercel.app](https://bountyhubapp.vercel.app)
 * **Target Ledger Infrastructure:** GenLayer Studio Network (Chain ID: 61999)
-* **Active Smart Contract Address:** `0x7308A2f910AE39E67a2b8f1E0772eBb36ff68a86`
+* **Active Smart Contract Address:** `0x5190896aD854bB8DDD44FCeb27792927aD6F380d`
 
 ---
 
