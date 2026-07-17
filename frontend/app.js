@@ -407,7 +407,7 @@ function startApp() {
                                     if (bountyReleased) {
                                         log(`[ADJUDICATION] The AI consensus evaluated the repository as secure.`, "success");
                                     } else {
-                                        log(`[ADJUDICATION] Bounty claim REJECTED.`, "warn");
+                                        log(`[ADJUDICATION] REJECTED.`, "warn");
                                     }
                                 } catch (e) {
                                     log(`Failed to fetch remarks: ${e.message}`, "warn");
