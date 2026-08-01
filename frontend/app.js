@@ -8,7 +8,7 @@ import { studionet } from "genlayer-js/chains";
 import { TransactionStatus } from "genlayer-js/types";
 
 // ── Config ──────────────────────────────────────────────────
-const CONTRACT_ADDRESS  = "0x3987794B1d71bea535bE648887dE09c0aFDeD477";
+const CONTRACT_ADDRESS  = "0xe5e5428f42dE23585bb0c65eaa54592770AAC5BD";
 const CHAIN_ID_HEX      = "0xf22f";   // 61999
 const CHAIN_ID_DEC      = 61999;
 const GENLAYER_RPC_URL  = "https://studio.genlayer.com/api";
