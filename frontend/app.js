@@ -202,7 +202,10 @@ function startApp() {
                 });
                 
             } catch(e) {
-                // Silently ignore polling errors
+                // If it fails (likely because the old contract address doesn't have the new method yet), update the UI to show empty state instead of "fetching"
+                if (bountiesList.innerHTML.includes("Fetching")) {
+                    bountiesList.innerHTML = `<div class="text-zinc-500 text-xs text-center mt-10">Unable to fetch bounties. Please ensure the contract is updated.</div>`;
+                }
             }
         };
         
