@@ -180,7 +180,7 @@ function startApp() {
                     
                     card.innerHTML = `
                         <div class="flex justify-between items-start mb-1">
-                            <span class="text-[#00f2fe] text-[11px] font-mono truncate mr-2" title="${url}">${repoName}</span>
+                            <a href="${url}" target="_blank" rel="noopener noreferrer" class="text-[#00f2fe] text-[11px] font-mono truncate mr-2 hover:underline" title="${url}">${repoName}</a>
                             <span class="text-emerald-400 text-[10px] font-bold whitespace-nowrap bg-emerald-400/10 px-2 py-0.5 rounded">${gen.toFixed(2)} GEN</span>
                         </div>
                         <button class="${btnClass}">
