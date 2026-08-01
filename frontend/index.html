@@ -329,79 +329,85 @@
             </div>
         </section>
 
-        <!-- Submission Panel -->
-        <section class="panel-hover bg-zinc-900/40 border border-zinc-800/80 rounded-xl p-5 backdrop-blur-sm">
-            <h2 class="text-[#45a29e] text-sm uppercase tracking-wider mb-1">Broadcast Evaluation Transaction</h2>
-            <p class="text-zinc-500 text-[11px] mb-5">Submit a URL. MetaMask will sign the transaction to the GenLayer smart contract on Studio Network.</p>
-
-            <form id="submission-form" class="space-y-4">
-                <div class="space-y-2">
-                    <label for="input-url" class="text-zinc-400 text-xs block uppercase tracking-wide">
-                        Target Verification Asset URL
-                    </label>
-                    <input
-                        type="url"
-                        id="input-url"
-                        required
-                        placeholder="https://github.com/your-repo"
-                        class="w-full bg-zinc-950/80 border border-zinc-800 rounded px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-[#45a29e] transition-colors"
-                    />
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Submission Panel -->
+            <section class="panel-hover bg-zinc-900/40 border border-zinc-800/80 rounded-xl p-5 flex flex-col backdrop-blur-sm">
+                <div>
+                    <h2 class="text-[#45a29e] text-sm uppercase tracking-wider mb-1">Broadcast Evaluation</h2>
+                    <p class="text-zinc-500 text-[11px] mb-5">Submit a URL to the GenLayer contract for consensus analysis.</p>
                 </div>
 
-                <button
-                    type="submit"
-                    id="btn-submit"
-                    class="w-full text-xs font-mono tracking-widest uppercase py-4 rounded faded-btn"
-                    disabled>
-                    CONNECT WALLET TO ENABLE BROADCAST
-                </button>
-            </form>
-        </section>
-
-        <!-- Sponsor Bounty Panel -->
-        <section class="panel-hover bg-zinc-900/40 border border-zinc-800/80 rounded-xl p-5 backdrop-blur-sm">
-            <h2 class="text-[#45a29e] text-sm uppercase tracking-wider mb-1">Sponsor an Evaluation Bounty</h2>
-            <p class="text-zinc-500 text-[11px] mb-5">Deposit GEN into the smart contract escrow to reward compliant repositories.</p>
-
-            <form id="sponsor-form" class="space-y-4">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div class="space-y-2">
-                        <label for="sponsor-url" class="text-zinc-400 text-xs block uppercase tracking-wide">
-                            Target Repository URL
+                <form id="submission-form" class="flex flex-col flex-1 justify-between">
+                    <div class="space-y-2 mb-6">
+                        <label for="input-url" class="text-zinc-400 text-[10px] block uppercase tracking-wide">
+                            Target Verification Asset URL
                         </label>
                         <input
                             type="url"
-                            id="sponsor-url"
+                            id="input-url"
                             required
                             placeholder="https://github.com/your-repo"
-                            class="w-full bg-zinc-950/80 border border-zinc-800 rounded px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-[#45a29e] transition-colors"
+                            class="w-full bg-zinc-950/80 border border-zinc-800 rounded px-4 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-[#45a29e] transition-colors"
                         />
                     </div>
-                    <div class="space-y-2">
-                        <label for="sponsor-amount" class="text-zinc-400 text-xs block uppercase tracking-wide">
-                            Bounty Amount (GEN)
-                        </label>
-                        <input
-                            type="number"
-                            id="sponsor-amount"
-                            required
-                            min="0.001"
-                            step="0.001"
-                            placeholder="1.0"
-                            class="w-full bg-zinc-950/80 border border-zinc-800 rounded px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-[#45a29e] transition-colors"
-                        />
-                    </div>
+
+                    <button
+                        type="submit"
+                        id="btn-submit"
+                        class="w-full text-xs font-mono tracking-widest uppercase py-3.5 rounded faded-btn mt-auto"
+                        disabled>
+                        CONNECT WALLET TO ENABLE
+                    </button>
+                </form>
+            </section>
+
+            <!-- Sponsor Bounty Panel -->
+            <section class="panel-hover bg-zinc-900/40 border border-zinc-800/80 rounded-xl p-5 flex flex-col backdrop-blur-sm">
+                <div>
+                    <h2 class="text-[#45a29e] text-sm uppercase tracking-wider mb-1">Sponsor a Bounty</h2>
+                    <p class="text-zinc-500 text-[11px] mb-5">Deposit GEN into the smart contract escrow to reward compliant repositories.</p>
                 </div>
 
-                <button
-                    type="submit"
-                    id="btn-sponsor"
-                    class="w-full text-xs font-mono tracking-widest uppercase py-4 rounded faded-btn"
-                    disabled>
-                    CONNECT WALLET TO SPONSOR
-                </button>
-            </form>
-        </section>
+                <form id="sponsor-form" class="flex flex-col flex-1 justify-between">
+                    <div class="space-y-4 mb-6">
+                        <div class="space-y-2">
+                            <label for="sponsor-url" class="text-zinc-400 text-[10px] block uppercase tracking-wide">
+                                Target Repository URL
+                            </label>
+                            <input
+                                type="url"
+                                id="sponsor-url"
+                                required
+                                placeholder="https://github.com/your-repo"
+                                class="w-full bg-zinc-950/80 border border-zinc-800 rounded px-4 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-[#45a29e] transition-colors"
+                            />
+                        </div>
+                        <div class="space-y-2">
+                            <label for="sponsor-amount" class="text-zinc-400 text-[10px] block uppercase tracking-wide">
+                                Bounty Amount (GEN)
+                            </label>
+                            <input
+                                type="number"
+                                id="sponsor-amount"
+                                required
+                                min="0.001"
+                                step="0.001"
+                                placeholder="1.0"
+                                class="w-full bg-zinc-950/80 border border-zinc-800 rounded px-4 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-[#45a29e] transition-colors"
+                            />
+                        </div>
+                    </div>
+
+                    <button
+                        type="submit"
+                        id="btn-sponsor"
+                        class="w-full text-xs font-mono tracking-widest uppercase py-3.5 rounded faded-btn mt-auto"
+                        disabled>
+                        CONNECT WALLET TO SPONSOR
+                    </button>
+                </form>
+            </section>
+        </div>
 
         <!-- Transaction Status Panel (hidden until tx sent) -->
         <section id="tx-status-box" class="hidden panel-hover bg-zinc-900/40 border border-zinc-800/80 rounded-xl p-5 backdrop-blur-sm">
