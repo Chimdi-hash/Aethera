@@ -8,7 +8,7 @@ class AetheraConsensusDiagnostics(gl.Contract):
     remarks: str
     bounty_released: bool
 
-    bounties: TreeMap[str, int]
+    bounties: TreeMap[str, u256]
     active_urls: DynArray[str]
 
     def __init__(self, initial_url: str):
@@ -16,13 +16,13 @@ class AetheraConsensusDiagnostics(gl.Contract):
         self.status = "READY"
         self.remarks = "Awaiting evaluation"
         self.bounty_released = False
-        self.bounties = TreeMap[str, int]()
+        self.bounties = TreeMap[str, u256]()
         self.active_urls = DynArray[str]()
 
     @gl.public.write.payable
     def fund_bounty(self, url: str) -> None:
-        amount = int(gl.message.value)
-        if url in self.bounties and self.bounties[url] > 0:
+        amount = u256(gl.message.value)
+        if url in self.bounties and self.bounties[url] > u256(0):
             self.bounties[url] += amount
         else:
             self.bounties[url] = amount
@@ -119,10 +119,10 @@ class AetheraConsensusDiagnostics(gl.Contract):
                 # ==== ADJUDICATION WORKFLOW ====
                 # Connect the consensus verdict to a tangible outcome
                 if self.status == "COMPLIANT":
-                    bounty_amt = self.bounties.get(url, 0)
-                    if bounty_amt > 0:
-                        gl.message.sender.emit_transfer(value=u256(bounty_amt), on='finalized')
-                        self.bounties[url] = 0
+                    bounty_amt = self.bounties.get(url, u256(0))
+                    if bounty_amt > u256(0):
+                        gl.message.sender.emit_transfer(value=bounty_amt, on='finalized')
+                        self.bounties[url] = u256(0)
                         self.bounty_released = True
                         if url in self.active_urls:
                             self.active_urls.remove(url)
@@ -161,7 +161,7 @@ class AetheraConsensusDiagnostics(gl.Contract):
         import json
         result = {}
         for url in self.active_urls:
-            amt = self.bounties.get(url, 0)
-            if amt > 0:
+            amt = self.bounties.get(url, u256(0))
+            if amt > u256(0):
                 result[url] = str(amt)
         return json.dumps(result)
