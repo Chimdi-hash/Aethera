@@ -437,7 +437,7 @@ function startApp() {
     }
 
     // ── 4. Track transaction status robustly ─────────────
-    async function trackTransaction(txHash) {
+    async function trackTransaction(txHash, txType = "eval") {
         if (!txHash) return;
 
         if (txStatusBox) txStatusBox.classList.remove("hidden");
@@ -475,42 +475,47 @@ function startApp() {
                         lastLoggedStatus = statusName;
                         
                         if (statusName === "ACCEPTED") {
-                            log("Consensus ACCEPTED ✓ — AI evaluation complete.", "success");
-                            if (liveUrl) liveUrl.textContent = `Last Validated: ${txHash.slice(0, 10)}...${txHash.slice(-8)}`;
-                            
-                            log("Waiting 5 seconds for state sync...", "info");
-                            setTimeout(async () => {
-                                // Fetch validator remarks from the contract
-                                try {
-                                    log("Fetching final validator remarks from contract...", "info");
-                                    const contractStatus = await genLayerClient.readContract({
-                                        address: CONTRACT_ADDRESS,
-                                        functionName: "get_status",
-                                        args: []
-                                    });
-                                    const contractRemarks = await genLayerClient.readContract({
-                                        address: CONTRACT_ADDRESS,
-                                        functionName: "get_remarks",
-                                        args: []
-                                    });
-                                    const bountyReleased = await genLayerClient.readContract({
-                                        address: CONTRACT_ADDRESS,
-                                        functionName: "is_bounty_released",
-                                        args: []
-                                    });
-                                    
-                                    log(`[VERDICT] Status: ${contractStatus}`, contractStatus === "COMPLIANT" ? "success" : "error");
-                                    log(`[REMARKS] ${contractRemarks}`, "info");
-                                    if (bountyReleased) {
-                                        log(`[ADJUDICATION] Consensus Resolution: Repository verified as fully compliant with security protocols. Grant disbursement authorized.`, "success");
-                                    } else {
-                                        log(`[ADJUDICATION] Consensus Resolution: Non-compliant logic or vulnerabilities detected. Grant disbursement locked.`, "warn");
+                            if (txType === "eval") {
+                                log("Consensus ACCEPTED ✓ — AI evaluation complete.", "success");
+                                if (liveUrl) liveUrl.textContent = `Last Validated: ${txHash.slice(0, 10)}...${txHash.slice(-8)}`;
+                                
+                                log("Waiting 5 seconds for state sync...", "info");
+                                setTimeout(async () => {
+                                    // Fetch validator remarks from the contract
+                                    try {
+                                        log("Fetching final validator remarks from contract...", "info");
+                                        const contractStatus = await genLayerClient.readContract({
+                                            address: CONTRACT_ADDRESS,
+                                            functionName: "get_status",
+                                            args: []
+                                        });
+                                        const contractRemarks = await genLayerClient.readContract({
+                                            address: CONTRACT_ADDRESS,
+                                            functionName: "get_remarks",
+                                            args: []
+                                        });
+                                        const bountyReleased = await genLayerClient.readContract({
+                                            address: CONTRACT_ADDRESS,
+                                            functionName: "is_bounty_released",
+                                            args: []
+                                        });
+                                        
+                                        log(`[VERDICT] Status: ${contractStatus}`, contractStatus === "COMPLIANT" ? "success" : "error");
+                                        log(`[REMARKS] ${contractRemarks}`, "info");
+                                        if (bountyReleased) {
+                                            log(`[ADJUDICATION] Consensus Resolution: Repository verified as fully compliant with security protocols. Grant disbursement authorized.`, "success");
+                                        } else {
+                                            log(`[ADJUDICATION] Consensus Resolution: Non-compliant logic or vulnerabilities detected. Grant disbursement locked.`, "warn");
+                                        }
+                                    } catch (e) {
+                                        log(`Failed to fetch remarks: ${e.message}`, "warn");
                                     }
-                                } catch (e) {
-                                    log(`Failed to fetch remarks: ${e.message}`, "warn");
-                                }
+                                    setSubmitReady(true);
+                                }, 5000);
+                            } else if (txType === "sponsor") {
+                                log("Consensus ACCEPTED ✓ — Bounty successfully escrowed.", "success");
                                 setSubmitReady(true);
-                            }, 5000);
+                            }
                             
                             return; // Tracking complete
                         }
@@ -648,7 +653,7 @@ function startApp() {
             if (sponsorAmount) sponsorAmount.value = "";
 
             // Start tracking the transaction
-            await trackTransaction(txHash);
+            await trackTransaction(txHash, "sponsor");
 
         } catch (err) {
             const msg = err?.message || String(err);
