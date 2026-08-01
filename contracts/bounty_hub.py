@@ -16,8 +16,6 @@ class AetheraConsensusDiagnostics(gl.Contract):
         self.status = "READY"
         self.remarks = "Awaiting evaluation"
         self.bounty_released = False
-        self.bounties = TreeMap[str, u256]()
-        self.active_urls = DynArray[str]()
 
     @gl.public.write.payable
     def fund_bounty(self, url: str) -> None:
