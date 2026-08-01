@@ -43,6 +43,10 @@ function startApp() {
     const txStatusBox   = document.getElementById("tx-status-box");
     const txHashEl      = document.getElementById("tx-hash");
     const txStatusEl    = document.getElementById("tx-status");
+    const sponsorForm   = document.getElementById("sponsor-form");
+    const sponsorUrl    = document.getElementById("sponsor-url");
+    const sponsorAmount = document.getElementById("sponsor-amount");
+    const btnSponsor    = document.getElementById("btn-sponsor");
 
     // ── Helpers ──────────────────────────────────────────
 
@@ -107,10 +111,19 @@ function startApp() {
             btnSubmit.className =
                 "w-full text-xs font-mono tracking-widest uppercase py-4 rounded shining-btn";
             btnSubmit.textContent = "BROADCAST EVALUATION";
+            if (btnSponsor) {
+                btnSponsor.disabled = false;
+                btnSponsor.className = "w-full text-xs font-mono tracking-widest uppercase py-4 rounded shining-btn";
+                btnSponsor.textContent = "SPONSOR BOUNTY";
+            }
         } else {
             btnSubmit.disabled = true;
             btnSubmit.className =
                 "w-full text-xs font-mono tracking-widest uppercase py-4 rounded faded-btn";
+            if (btnSponsor) {
+                btnSponsor.disabled = true;
+                btnSponsor.className = "w-full text-xs font-mono tracking-widest uppercase py-4 rounded faded-btn";
+            }
         }
     }
 
@@ -518,6 +531,61 @@ function startApp() {
         }
     }
 
+    async function handleSponsor(event) {
+        if (event) event.preventDefault();
+
+        const targetUrl = sponsorUrl ? sponsorUrl.value.trim() : "";
+        const amountGen = sponsorAmount ? sponsorAmount.value.trim() : "";
+        
+        if (!targetUrl || !amountGen) {
+            log("Please enter a valid URL and amount.", "warn");
+            return;
+        }
+        if (!userAddress || !genLayerClient) {
+            log("Connect your wallet first.", "error");
+            return;
+        }
+
+        setSubmitReady(false);
+        if (btnSponsor) btnSponsor.textContent = "BROADCASTING…";
+        if (txStatusBox) txStatusBox.classList.add("hidden");
+
+        try {
+            await ensureGenLayerNetwork();
+
+            log(`Sponsoring bounty for: ${targetUrl} with ${amountGen} GEN`);
+            log("MetaMask will open — please sign the transaction…", "warn");
+            
+            // Convert GEN to wei
+            const amountWei = BigInt(Math.floor(parseFloat(amountGen) * 1e18));
+
+            const txHash = await genLayerClient.writeContract({
+                address:      CONTRACT_ADDRESS,
+                functionName: "fund_bounty",
+                args:         [targetUrl],
+                value:        amountWei,
+            });
+
+            log(`Transaction sent! Hash: ${txHash}`, "success");
+            if (sponsorUrl) sponsorUrl.value = "";
+            if (sponsorAmount) sponsorAmount.value = "";
+
+            // Start tracking the transaction
+            await trackTransaction(txHash);
+
+        } catch (err) {
+            const msg = err?.message || String(err);
+            if (msg.includes("4001") || msg.includes("user rejected") || msg.includes("denied")) {
+                log("Transaction rejected by user.", "warn");
+                showTxStatus("", "CANCELED");
+            } else {
+                log(`Error: ${msg}`, "error");
+                showTxStatus("", "ERROR");
+            }
+            setSubmitReady(true);
+        }
+    }
+
     // ── 5. Wire up events ─────────────────────────────────
     if (btnConnect) {
         btnConnect.addEventListener("click", async (e) => {
@@ -531,6 +599,8 @@ function startApp() {
     }
     if (submissionForm) submissionForm.addEventListener("submit", handleSubmission);
     if (btnSubmit)  btnSubmit.addEventListener("click", handleSubmission);
+    if (sponsorForm) sponsorForm.addEventListener("submit", handleSponsor);
+    if (btnSponsor) btnSponsor.addEventListener("click", handleSponsor);
 
     // ── 6. Boot ───────────────────────────────────────────
     initAethera();

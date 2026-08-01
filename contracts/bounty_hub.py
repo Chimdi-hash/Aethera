@@ -8,11 +8,22 @@ class AetheraConsensusDiagnostics(gl.Contract):
     remarks: str
     bounty_released: bool
 
+    bounties: dict
+
     def __init__(self, initial_url: str):
         self.repository_url = initial_url
         self.status = "READY"
         self.remarks = "Awaiting evaluation"
         self.bounty_released = False
+        self.bounties = {}
+
+    @gl.public.write.payable
+    def fund_bounty(self, url: str) -> None:
+        amount = int(gl.message.value)
+        if url in self.bounties:
+            self.bounties[url] += amount
+        else:
+            self.bounties[url] = amount
 
     @gl.public.write.payable
     def submit_and_evaluate(self, url: str) -> None:
@@ -39,12 +50,30 @@ class AetheraConsensusDiagnostics(gl.Contract):
                             repo_path = repo_path[:-1]
                         if repo_path.endswith(".git"):
                             repo_path = repo_path[:-4]
-                        api_url = "https://api.github.com/repos/" + repo_path + "/readme"
                         try:
-                            response = gl.nondet.web.get(api_url)
-                            data = json.loads(response.body.decode('utf-8'))
-                            if 'content' in data:
-                                content_to_analyze = base64.b64decode(data['content']).decode('utf-8', errors='ignore')
+                            # 1. Fetch latest commit SHA
+                            commit_api = "https://api.github.com/repos/" + repo_path + "/commits/HEAD"
+                            commit_res = gl.nondet.web.get(commit_api)
+                            commit_data = json.loads(commit_res.body.decode('utf-8'))
+                            commit_sha = commit_data.get('sha', '')
+                            
+                            if commit_sha:
+                                content_to_analyze += f"Target Commit SHA: {commit_sha}\n\n"
+                                
+                                # 2. Fetch source tree for that commit
+                                tree_api = "https://api.github.com/repos/" + repo_path + "/git/trees/" + commit_sha + "?recursive=1"
+                                tree_res = gl.nondet.web.get(tree_api)
+                                tree_data = json.loads(tree_res.body.decode('utf-8'))
+                                paths = [item['path'] for item in tree_data.get('tree', []) if item.get('type') == 'blob']
+                                content_to_analyze += "Repository Architecture (Tree):\n" + "\n".join(paths[:30]) + "\n\n"
+                                
+                            # 3. Fetch README
+                            readme_api = "https://api.github.com/repos/" + repo_path + "/readme"
+                            readme_res = gl.nondet.web.get(readme_api)
+                            readme_data = json.loads(readme_res.body.decode('utf-8'))
+                            if 'content' in readme_data:
+                                readme_content = base64.b64decode(readme_data['content']).decode('utf-8', errors='ignore')
+                                content_to_analyze += "README File:\n" + readme_content
                         except Exception as e:
                             pass
                 
@@ -55,7 +84,7 @@ class AetheraConsensusDiagnostics(gl.Contract):
                     except Exception as e:
                         return "NON_COMPLIANT|Fetch Error: " + str(e)
 
-                content_to_analyze = content_to_analyze[:1500]
+                content_to_analyze = content_to_analyze[:2500]
 
                 prompt = "Analyze the following content from a repository for security vulnerabilities:\n\n" + content_to_analyze + "\n\nFormat your response EXACTLY like this: STATUS|REMARK\nWhere STATUS is either COMPLIANT or NON_COMPLIANT, and REMARK is a short 1-sentence remark explaining why. Do not use any other formatting or JSON."
                 
@@ -73,7 +102,7 @@ class AetheraConsensusDiagnostics(gl.Contract):
                 except Exception as e:
                     return "NON_COMPLIANT|Analysis failed: " + str(e)
             
-            eq_prompt = "You are comparing two security analysis results formatted as STATUS|REMARK. Consider them EQUIVALENT and return true as long as both follow the STATUS|REMARK format and have some text for the remark, regardless of the exact wording."
+            eq_prompt = "You are comparing two security analysis results formatted as STATUS|REMARK. Consider them EQUIVALENT ONLY if the STATUS portion (e.g., COMPLIANT or NON_COMPLIANT) is exactly identical. The REMARK portion can differ in wording as long as the underlying reasoning is similar."
             
             # Pass the closure with exactly 2 arguments
             result_str = gl.eq_principle.prompt_comparative(_eval_repo_closure, eq_prompt)
@@ -86,9 +115,13 @@ class AetheraConsensusDiagnostics(gl.Contract):
                 # ==== ADJUDICATION WORKFLOW ====
                 # Connect the consensus verdict to a tangible outcome
                 if self.status == "COMPLIANT":
-                    self.bounty_released = True
-                    # Disburse exactly 1 GEN token natively to the submitter:
-                    gl.message.sender.emit_transfer(value=u256(1000000000000000000), on='finalized')
+                    bounty_amt = self.bounties.get(url, 0)
+                    if bounty_amt > 0:
+                        gl.message.sender.emit_transfer(value=u256(bounty_amt), on='finalized')
+                        self.bounties[url] = 0
+                        self.bounty_released = True
+                    else:
+                        self.bounty_released = False
                 else:
                     self.bounty_released = False
             else:
