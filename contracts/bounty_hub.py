@@ -31,7 +31,7 @@ class AetheraConsensusDiagnostics(gl.Contract):
         else:
             self.bounties[url] = amount
         
-        self.bounty_sponsors[url] = gl.message.sender_address
+        self.bounty_sponsors[url] = str(gl.message.sender_address)
         
         if url not in self.active_urls:
             self.active_urls.append(url)
