@@ -31,9 +31,7 @@ function startApp() {
     const liveTitle     = document.getElementById("live-title");
     const liveCriteria  = document.getElementById("live-criteria");
     const liveUrl       = document.getElementById("live-url");
-    const submissionForm= document.getElementById("submission-form");
-    const inputUrl      = document.getElementById("input-url");
-    const btnSubmit     = document.getElementById("btn-submit");
+    const bountiesList  = document.getElementById("bounties-list");
     const btnConnect    = document.getElementById("btn-connect");
     const walletDropdown= document.getElementById("wallet-dropdown");
     const btnDisconnect = document.getElementById("btn-disconnect");
@@ -105,26 +103,95 @@ function startApp() {
     }
 
     function setSubmitReady(ready) {
-        if (!btnSubmit) return;
-        if (ready) {
-            btnSubmit.disabled = false;
-            btnSubmit.className =
-                "w-full text-xs font-mono tracking-widest uppercase py-4 rounded shining-btn";
-            btnSubmit.textContent = "BROADCAST EVALUATION";
-            if (btnSponsor) {
+        if (btnSponsor) {
+            if (ready) {
                 btnSponsor.disabled = false;
-                btnSponsor.className = "w-full text-xs font-mono tracking-widest uppercase py-4 rounded shining-btn";
+                btnSponsor.className = "w-full text-xs font-mono tracking-widest uppercase py-3.5 rounded shining-btn mt-auto";
                 btnSponsor.textContent = "SPONSOR BOUNTY";
-            }
-        } else {
-            btnSubmit.disabled = true;
-            btnSubmit.className =
-                "w-full text-xs font-mono tracking-widest uppercase py-4 rounded faded-btn";
-            if (btnSponsor) {
+            } else {
                 btnSponsor.disabled = true;
-                btnSponsor.className = "w-full text-xs font-mono tracking-widest uppercase py-4 rounded faded-btn";
+                btnSponsor.className = "w-full text-xs font-mono tracking-widest uppercase py-3.5 rounded faded-btn mt-auto";
             }
         }
+
+        // Also update the Evaluate buttons in the dynamic list
+        const evalButtons = document.querySelectorAll('.btn-evaluate');
+        evalButtons.forEach(btn => {
+            if (ready) {
+                btn.disabled = false;
+                btn.className = "btn-evaluate w-full text-[10px] font-mono tracking-widest uppercase py-2 mt-2 rounded shining-btn";
+                btn.textContent = "RUN EVALUATION";
+            } else {
+                btn.disabled = true;
+                btn.className = "btn-evaluate w-full text-[10px] font-mono tracking-widest uppercase py-2 mt-2 rounded faded-btn";
+                btn.textContent = "PLEASE WAIT...";
+            }
+        });
+    }
+
+    let isPollingBounties = false;
+    async function pollActiveBounties() {
+        if (isPollingBounties || !genLayerClient) return;
+        isPollingBounties = true;
+        
+        const fetchAndRender = async () => {
+            if (!genLayerClient || !bountiesList) return;
+            try {
+                const bountiesStr = await genLayerClient.readContract({
+                    address: CONTRACT_ADDRESS,
+                    functionName: "get_active_bounties",
+                    args: []
+                });
+                const bounties = JSON.parse(bountiesStr);
+                const urls = Object.keys(bounties);
+                
+                if (urls.length === 0) {
+                    bountiesList.innerHTML = `<div class="text-zinc-500 text-xs text-center mt-10">No active bounties available right now.</div>`;
+                    return;
+                }
+                
+                // Only re-render if something changed, to prevent button flicker. 
+                // We'll just do a simple HTML re-render for now.
+                bountiesList.innerHTML = '';
+                urls.forEach(url => {
+                    const wei = BigInt(bounties[url]);
+                    const gen = Number(wei) / 1e18;
+                    
+                    const card = document.createElement("div");
+                    card.className = "bg-zinc-950/60 p-3 rounded-lg border border-zinc-800/40 relative";
+                    
+                    let repoName = url;
+                    try {
+                        const parts = url.split("github.com/");
+                        if (parts.length === 2) repoName = parts[1].replace(".git", "");
+                    } catch(e) {}
+                    
+                    card.innerHTML = `
+                        <div class="flex justify-between items-start mb-1">
+                            <span class="text-[#00f2fe] text-[11px] font-mono truncate mr-2" title="${url}">${repoName}</span>
+                            <span class="text-emerald-400 text-[10px] font-bold whitespace-nowrap bg-emerald-400/10 px-2 py-0.5 rounded">${gen.toFixed(2)} GEN</span>
+                        </div>
+                        <button class="btn-evaluate w-full text-[10px] font-mono tracking-widest uppercase py-2 mt-2 rounded shining-btn">
+                            RUN EVALUATION
+                        </button>
+                    `;
+                    
+                    const btn = card.querySelector('.btn-evaluate');
+                    btn.addEventListener("click", (e) => {
+                        e.preventDefault();
+                        handleSubmission(url, btn);
+                    });
+                    
+                    bountiesList.appendChild(card);
+                });
+                
+            } catch(e) {
+                // Silently ignore polling errors
+            }
+        };
+        
+        await fetchAndRender();
+        setInterval(fetchAndRender, 10000);
     }
 
     // ── 1. Init ──────────────────────────────────────────
@@ -307,6 +374,7 @@ function startApp() {
 
             setSubmitReady(true);
             setStatus("WALLET CONNECTED", true);
+            pollActiveBounties();
 
 
 
@@ -358,7 +426,6 @@ function startApp() {
         if (txStatusBox) txStatusBox.classList.remove("hidden");
         showTxStatus(txHash, "PENDING");
         setSubmitReady(false);
-        if (btnSubmit) btnSubmit.textContent = "TRACKING TRANSACTION…";
 
         log(`Started tracking transaction: ${txHash}`);
 
@@ -469,21 +536,15 @@ function startApp() {
     }
 
     // ── 5. Send transaction ───────────────────────────────
-    async function handleSubmission(event) {
-        if (event) event.preventDefault();
-
-        const targetUrl = inputUrl ? inputUrl.value.trim() : "";
-        if (!targetUrl) {
-            log("Please enter a valid URL.", "warn");
-            return;
-        }
+    async function handleSubmission(targetUrl, buttonEl) {
+        if (!targetUrl) return;
         if (!userAddress || !genLayerClient) {
             log("Connect your wallet first.", "error");
             return;
         }
 
         setSubmitReady(false);
-        btnSubmit.textContent = "BROADCASTING…";
+        if (buttonEl) buttonEl.textContent = "BROADCASTING…";
         if (txStatusBox) txStatusBox.classList.add("hidden");
 
         try {
@@ -503,7 +564,6 @@ function startApp() {
             });
 
             log(`Transaction sent! Hash: ${txHash}`, "success");
-            if (inputUrl) inputUrl.value = "";
 
             // Start tracking the transaction
             await trackTransaction(txHash);
@@ -597,8 +657,6 @@ function startApp() {
             }
         });
     }
-    if (submissionForm) submissionForm.addEventListener("submit", handleSubmission);
-    if (btnSubmit)  btnSubmit.addEventListener("click", handleSubmission);
     if (sponsorForm) sponsorForm.addEventListener("submit", handleSponsor);
     if (btnSponsor) btnSponsor.addEventListener("click", handleSponsor);
 

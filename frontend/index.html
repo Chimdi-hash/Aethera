@@ -406,38 +406,19 @@
                 </form>
             </section>
 
-            <!-- Submission Panel (Moved to Second) -->
+            <!-- Active Bounties Feed (Replaces Submission Panel) -->
             <section class="cyber-panel rounded-xl p-5 flex flex-col">
                 <div>
                     <h2 class="text-[#00f2fe] text-sm uppercase tracking-wider mb-1 flex items-center">
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                        Broadcast Evaluation
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                        Active Sponsored Bounties
                     </h2>
-                    <p class="text-zinc-400 text-[11px] mb-5">Submit a URL to the GenLayer contract for consensus analysis to claim the bounty.</p>
+                    <p class="text-zinc-400 text-[11px] mb-4">Live feed of unverified repositories. Claim the escrowed GEN by running an evaluation.</p>
                 </div>
 
-                <form id="submission-form" class="flex flex-col flex-1 justify-between">
-                    <div class="space-y-2 mb-6">
-                        <label for="input-url" class="text-zinc-400 text-[10px] block uppercase tracking-wide">
-                            Target Verification Asset URL
-                        </label>
-                        <input
-                            type="url"
-                            id="input-url"
-                            required
-                            placeholder="https://github.com/your-repo"
-                            class="cyber-input w-full rounded px-4 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-[#45a29e] transition-colors"
-                        />
-                    </div>
-
-                    <button
-                        type="submit"
-                        id="btn-submit"
-                        class="w-full text-xs font-mono tracking-widest uppercase py-3.5 rounded faded-btn mt-auto"
-                        disabled>
-                        CONNECT WALLET TO ENABLE
-                    </button>
-                </form>
+                <div id="bounties-list" class="flex-1 overflow-y-auto space-y-3 pr-1 min-h-[200px] max-h-[250px]">
+                    <div class="text-zinc-500 text-xs text-center mt-10">Connect wallet to view active bounties.</div>
+                </div>
             </section>
         </div>
 

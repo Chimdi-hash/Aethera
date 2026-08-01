@@ -16,14 +16,17 @@ class AetheraConsensusDiagnostics(gl.Contract):
         self.remarks = "Awaiting evaluation"
         self.bounty_released = False
         self.bounties = {}
+        self.active_urls = []
 
     @gl.public.write.payable
     def fund_bounty(self, url: str) -> None:
         amount = int(gl.message.value)
-        if url in self.bounties:
+        if url in self.bounties and self.bounties[url] > 0:
             self.bounties[url] += amount
         else:
             self.bounties[url] = amount
+            if url not in self.active_urls:
+                self.active_urls.append(url)
 
     @gl.public.write.payable
     def submit_and_evaluate(self, url: str) -> None:
@@ -120,6 +123,8 @@ class AetheraConsensusDiagnostics(gl.Contract):
                         gl.message.sender.emit_transfer(value=u256(bounty_amt), on='finalized')
                         self.bounties[url] = 0
                         self.bounty_released = True
+                        if url in self.active_urls:
+                            self.active_urls.remove(url)
                     else:
                         self.bounty_released = False
                 else:
@@ -149,3 +154,13 @@ class AetheraConsensusDiagnostics(gl.Contract):
     @gl.public.view
     def is_bounty_released(self) -> bool:
         return self.bounty_released
+
+    @gl.public.view
+    def get_active_bounties(self) -> str:
+        import json
+        result = {}
+        for url in self.active_urls:
+            amt = self.bounties.get(url, 0)
+            if amt > 0:
+                result[url] = str(amt)
+        return json.dumps(result)
