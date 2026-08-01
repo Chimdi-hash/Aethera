@@ -8,15 +8,16 @@ class AetheraConsensusDiagnostics(gl.Contract):
     remarks: str
     bounty_released: bool
 
-    bounties: dict
+    bounties: TreeMap[str, int]
+    active_urls: DynArray[str]
 
     def __init__(self, initial_url: str):
         self.repository_url = initial_url
         self.status = "READY"
         self.remarks = "Awaiting evaluation"
         self.bounty_released = False
-        self.bounties = {}
-        self.active_urls = []
+        self.bounties = TreeMap[str, int]()
+        self.active_urls = DynArray[str]()
 
     @gl.public.write.payable
     def fund_bounty(self, url: str) -> None:
