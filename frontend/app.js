@@ -155,7 +155,7 @@ function startApp() {
                     return;
                 }
                 
-                bountiesList.innerHTML = '';
+                const newCards = [];
                 
                 for (const url of urls) {
                     const wei = BigInt(bounties[url]);
@@ -213,8 +213,12 @@ function startApp() {
                         });
                     }
                     
-                    bountiesList.appendChild(card);
+                    newCards.push(card);
                 }
+                
+                // Swap the DOM in one go to prevent blinking
+                bountiesList.innerHTML = '';
+                newCards.forEach(card => bountiesList.appendChild(card));
                 
             } catch(e) {
                 if (bountiesList.innerHTML.includes("Fetching")) {
