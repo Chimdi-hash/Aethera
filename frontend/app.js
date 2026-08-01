@@ -155,15 +155,27 @@ function startApp() {
                     return;
                 }
                 
-                // Only re-render if something changed, to prevent button flicker. 
-                // We'll just do a simple HTML re-render for now.
                 bountiesList.innerHTML = '';
-                urls.forEach(url => {
+                
+                for (const url of urls) {
                     const wei = BigInt(bounties[url]);
                     const gen = Number(wei) / 1e18;
                     
+                    let sponsorRes = "Unknown";
+                    try {
+                        sponsorRes = await clientToUse.readContract({
+                            address: CONTRACT_ADDRESS,
+                            functionName: "get_bounty_sponsor",
+                            args: [url]
+                        });
+                    } catch(e) {}
+                    
+                    const sponsor = sponsorRes || "Unknown";
+                    const shortSponsor = sponsor !== "Unknown" ? `${sponsor.substring(0,6)}...${sponsor.substring(sponsor.length-4)}` : sponsor;
+                    const isSponsor = userAddress && userAddress.toLowerCase() === sponsor.toLowerCase();
+                    
                     const card = document.createElement("div");
-                    card.className = "bg-zinc-950/60 p-3 rounded-lg border border-zinc-800/40 relative";
+                    card.className = "bg-zinc-950/60 p-3 rounded-lg border border-zinc-800/40 relative flex flex-col gap-2 hover:border-emerald-500/30 transition-colors duration-300";
                     
                     let repoName = url;
                     try {
@@ -171,38 +183,40 @@ function startApp() {
                         if (parts.length === 2) repoName = parts[1].replace(".git", "");
                     } catch(e) {}
                     
-                    // Determine button state
-                    const btnClass = userAddress 
-                        ? "btn-evaluate w-full text-[10px] font-mono tracking-widest uppercase py-2 mt-2 rounded shining-btn" 
-                        : "btn-evaluate-connect w-full text-[10px] font-mono tracking-widest uppercase py-2 mt-2 rounded faded-btn hover:opacity-100 transition-opacity";
+                    let actionHtml = "";
+                    let btnClass = "btn-evaluate w-full text-[10px] font-mono tracking-widest uppercase py-2 mt-2 rounded shining-btn";
                     
-                    const btnText = userAddress ? "RUN EVALUATION" : "CONNECT WALLET TO EVALUATE";
+                    if (!userAddress) {
+                        actionHtml = `<div class="text-zinc-500 text-[10px] text-center italic mt-1 py-1.5">Connect wallet to interact</div>`;
+                    } else if (isSponsor) {
+                        actionHtml = `<button class="${btnClass}">RUN EVALUATION</button>`;
+                    } else {
+                        actionHtml = `<div class="text-zinc-500 text-[10px] text-center italic mt-1 py-1.5">Only the sponsor can run evaluation</div>`;
+                    }
                     
                     card.innerHTML = `
-                        <div class="flex justify-between items-start mb-1">
-                            <a href="${url}" target="_blank" rel="noopener noreferrer" class="text-[#00f2fe] text-[11px] font-mono truncate mr-2 hover:underline" title="${url}">${repoName}</a>
-                            <span class="text-emerald-400 text-[10px] font-bold whitespace-nowrap bg-emerald-400/10 px-2 py-0.5 rounded">${gen.toFixed(2)} GEN</span>
+                        <div class="flex flex-col gap-1 mb-1">
+                            <div class="flex justify-between items-start">
+                                <a href="${url}" target="_blank" rel="noopener noreferrer" class="text-[#00f2fe] text-[11px] font-mono truncate mr-2 hover:underline" title="${url}">${repoName}</a>
+                                <span class="text-emerald-400 text-[10px] font-bold whitespace-nowrap bg-emerald-400/10 px-2 py-0.5 rounded">${gen.toFixed(2)} GEN</span>
+                            </div>
+                            <div class="text-zinc-500 text-[9px] font-mono">Sponsor: <span class="text-zinc-300" title="${sponsor}">${shortSponsor}</span></div>
                         </div>
-                        <button class="${btnClass}">
-                            ${btnText}
-                        </button>
+                        ${actionHtml}
                     `;
                     
                     const btn = card.querySelector('button');
-                    btn.addEventListener("click", async (e) => {
-                        e.preventDefault();
-                        if (!userAddress) {
-                            await connectWallet();
-                        } else {
+                    if (btn) {
+                        btn.addEventListener("click", async (e) => {
+                            e.preventDefault();
                             handleSubmission(url, btn);
-                        }
-                    });
+                        });
+                    }
                     
                     bountiesList.appendChild(card);
-                });
+                }
                 
             } catch(e) {
-                // If it fails (likely because the old contract address doesn't have the new method yet), update the UI to show empty state instead of "fetching"
                 if (bountiesList.innerHTML.includes("Fetching")) {
                     bountiesList.innerHTML = `<div class="text-zinc-500 text-xs text-center mt-10">Unable to fetch bounties. Please ensure the contract is updated.</div>`;
                 }

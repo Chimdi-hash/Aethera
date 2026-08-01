@@ -14,6 +14,7 @@ class AetheraConsensusDiagnostics(gl.Contract):
     bounty_released: bool
 
     bounties: TreeMap[str, u256]
+    bounty_sponsors: TreeMap[str, str]
     active_urls: DynArray[str]
 
     def __init__(self, initial_url: str):
@@ -29,8 +30,11 @@ class AetheraConsensusDiagnostics(gl.Contract):
             self.bounties[url] += amount
         else:
             self.bounties[url] = amount
-            if url not in self.active_urls:
-                self.active_urls.append(url)
+        
+        self.bounty_sponsors[url] = gl.message.sender_address
+        
+        if url not in self.active_urls:
+            self.active_urls.append(url)
 
     @gl.public.write.payable
     def submit_and_evaluate(self, url: str) -> None:
@@ -159,6 +163,10 @@ class AetheraConsensusDiagnostics(gl.Contract):
     @gl.public.view
     def is_bounty_released(self) -> bool:
         return self.bounty_released
+
+    @gl.public.view
+    def get_bounty_sponsor(self, url: str) -> str:
+        return self.bounty_sponsors.get(url, "")
 
     @gl.public.view
     def get_active_bounties(self) -> str:
