@@ -24,6 +24,10 @@ let genLayerClient  = null;
 
 // ── ALL logic is deferred until the DOM is ready ────────────
 function startApp() {
+    let readOnlyClient = createClient({
+        chain: studionet,
+        endpoint: PROXY_RPC_URL,
+    });
 
     // ── DOM refs (safe here — body is fully parsed) ──────
     const statusBadge   = document.getElementById("status-badge");
@@ -131,13 +135,14 @@ function startApp() {
 
     let isPollingBounties = false;
     async function pollActiveBounties() {
-        if (isPollingBounties || !genLayerClient) return;
+        if (isPollingBounties) return;
         isPollingBounties = true;
         
         const fetchAndRender = async () => {
-            if (!genLayerClient || !bountiesList) return;
+            if (!bountiesList) return;
             try {
-                const bountiesStr = await genLayerClient.readContract({
+                const clientToUse = genLayerClient || readOnlyClient;
+                const bountiesStr = await clientToUse.readContract({
                     address: CONTRACT_ADDRESS,
                     functionName: "get_active_bounties",
                     args: []
@@ -166,20 +171,31 @@ function startApp() {
                         if (parts.length === 2) repoName = parts[1].replace(".git", "");
                     } catch(e) {}
                     
+                    // Determine button state
+                    const btnClass = userAddress 
+                        ? "btn-evaluate w-full text-[10px] font-mono tracking-widest uppercase py-2 mt-2 rounded shining-btn" 
+                        : "btn-evaluate-connect w-full text-[10px] font-mono tracking-widest uppercase py-2 mt-2 rounded faded-btn hover:opacity-100 transition-opacity";
+                    
+                    const btnText = userAddress ? "RUN EVALUATION" : "CONNECT WALLET TO EVALUATE";
+                    
                     card.innerHTML = `
                         <div class="flex justify-between items-start mb-1">
                             <span class="text-[#00f2fe] text-[11px] font-mono truncate mr-2" title="${url}">${repoName}</span>
                             <span class="text-emerald-400 text-[10px] font-bold whitespace-nowrap bg-emerald-400/10 px-2 py-0.5 rounded">${gen.toFixed(2)} GEN</span>
                         </div>
-                        <button class="btn-evaluate w-full text-[10px] font-mono tracking-widest uppercase py-2 mt-2 rounded shining-btn">
-                            RUN EVALUATION
+                        <button class="${btnClass}">
+                            ${btnText}
                         </button>
                     `;
                     
-                    const btn = card.querySelector('.btn-evaluate');
-                    btn.addEventListener("click", (e) => {
+                    const btn = card.querySelector('button');
+                    btn.addEventListener("click", async (e) => {
                         e.preventDefault();
-                        handleSubmission(url, btn);
+                        if (!userAddress) {
+                            await connectWallet();
+                        } else {
+                            handleSubmission(url, btn);
+                        }
                     });
                     
                     bountiesList.appendChild(card);
@@ -222,6 +238,9 @@ function startApp() {
             if (liveCriteria) liveCriteria.textContent =
                 "Active Rules: Verify content authenticity via GitHub repository link.";
             log("Aethera network infrastructure connected — GenLayer Studio.", "success");
+            
+            // Start fetching bounties immediately, before wallet connects
+            pollActiveBounties();
 
             // Auto-connect if already authorized in MetaMask
             if (typeof window.ethereum !== "undefined") {
@@ -374,7 +393,14 @@ function startApp() {
 
             setSubmitReady(true);
             setStatus("WALLET CONNECTED", true);
-            pollActiveBounties();
+            
+            // Re-render the active bounties list to light up the Evaluate buttons
+            if (isPollingBounties) {
+                // Manually trigger a render pass right now instead of waiting for the 10s interval
+                bountiesList.innerHTML = `<div class="text-zinc-500 text-xs text-center mt-10">Refreshing bounties...</div>`;
+                isPollingBounties = false; 
+                pollActiveBounties();
+            }
 
 
 
