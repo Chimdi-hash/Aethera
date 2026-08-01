@@ -119,7 +119,8 @@ class AetheraConsensusDiagnostics(gl.Contract):
                 if self.status == "COMPLIANT":
                     bounty_amt = self.bounties.get(url, u256(0))
                     if bounty_amt > u256(0):
-                        gl.message.sender.emit_transfer(value=bounty_amt, on='finalized')
+                        target = gl.get_contract_at(Address(gl.message.sender_address))
+                        target.emit_transfer(value=bounty_amt, on='finalized')
                         self.bounties[url] = u256(0)
                         self.bounty_released = True
                         if url in self.active_urls:
