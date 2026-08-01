@@ -242,18 +242,6 @@ function startApp() {
             // Start fetching bounties immediately, before wallet connects
             pollActiveBounties();
 
-            // Auto-connect if already authorized in MetaMask
-            if (typeof window.ethereum !== "undefined") {
-                try {
-                    const accounts = await window.ethereum.request({ method: "eth_accounts" });
-                    if (accounts && accounts.length > 0) {
-                        log("Restoring previous wallet session…");
-                        await connectWallet();
-                    }
-                } catch (e) {
-                    // Ignore silent check errors
-                }
-            }
         } catch (err) {
             setStatus("NODE OFFLINE", false);
             if (liveTitle) liveTitle.textContent = "Unable to reach GenLayer node";
