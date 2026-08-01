@@ -2,6 +2,11 @@
 
 from genlayer import *
 
+@gl.evm.contract_interface
+class _Recipient:
+    class View: pass
+    class Write: pass
+
 class AetheraConsensusDiagnostics(gl.Contract):
     repository_url: str
     status: str
@@ -119,7 +124,7 @@ class AetheraConsensusDiagnostics(gl.Contract):
                 if self.status == "COMPLIANT":
                     bounty_amt = self.bounties.get(url, u256(0))
                     if bounty_amt > u256(0):
-                        target = gl.get_contract_at(gl.message.sender_address)
+                        target = _Recipient(gl.message.sender_address)
                         target.emit_transfer(value=bounty_amt, on='finalized')
                         self.bounties[url] = u256(0)
                         self.bounty_released = True
